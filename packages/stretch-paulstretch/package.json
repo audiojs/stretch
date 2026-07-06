@@ -1,0 +1,47 @@
+{
+  "name": "@audio/stretch-paulstretch",
+  "version": "1.0.0",
+  "description": "Paulstretch — Paul Nasca's extreme stretch (8×+) for ambient/drone material",
+  "type": "module",
+  "sideEffects": false,
+  "main": "paulstretch.js",
+  "types": "paulstretch.d.ts",
+  "exports": {
+    ".": "./paulstretch.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "paulstretch.js",
+    "paulstretch.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0",
+    "fourier-transform": "^2.3.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "paulstretch",
+    "ambient",
+    "drone",
+    "stft"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-paulstretch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-paulstretch"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}

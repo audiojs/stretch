@@ -1,13 +1,11 @@
 // Quality metrics for time-stretch/pitch-shift algorithms.
-// Compare an algorithm's output against a reference signal via spectral
-// distance — time-domain alignment is not required, only spectral content.
+// Spectral distance — time-domain alignment not required.
 
 import { fft } from 'fourier-transform'
-import { hannWindow } from './util.js'
+import { hannWindow } from './index.js'
 
 // Frame-averaged log-spectral distance in dB. Lower is better.
 // ~1 dB: transparent. 2–4 dB: audible colouration. >5 dB: degraded.
-// Silent frames (below energy floor) are skipped so trailing zeros don't bias.
 export function lsd(a, b, opts = {}) {
   let N = opts.frameSize || 1024
   let hop = opts.hopSize || (N >> 1)
@@ -45,7 +43,7 @@ export function lsd(a, b, opts = {}) {
   return frames ? sum / frames : 0
 }
 
-// Frame-averaged cosine similarity of magnitude spectra. 1 = identical, 0 = orthogonal.
+// Frame-averaged cosine similarity of magnitude spectra. 1 = identical.
 export function spectralSim(a, b, opts = {}) {
   let N = opts.frameSize || 1024
   let hop = opts.hopSize || (N >> 1)
@@ -75,14 +73,14 @@ export function spectralSim(a, b, opts = {}) {
   return frames ? sum / frames : 0
 }
 
-// fft() returns zero-copy views into a per-size cache — copy magnitudes out immediately.
+// fft() returns zero-copy views into a per-size cache — copy magnitudes immediately.
 let _scratch = new Map()
 function magFrame(data, pos, win, N, half, magOut) {
   let f = _scratch.get(N)
   if (!f) { f = new Float64Array(N); _scratch.set(N, f) }
   let e = 0
   for (let i = 0; i < N; i++) {
-    let v = (data[pos + i] || 0) * win[i]
+    let v = data[pos + i] * win[i]
     f[i] = v
     e += v * v
   }
@@ -122,12 +120,7 @@ export function chordRetention(data, ref, freqs, sr) {
 }
 
 // Per-partial amplitude-modulation depth — captures hop-rate beating ("crumble")
-// that LSD misses. Slides a Hann-windowed complex demodulator (rotate to baseband,
-// integrate) at each frequency to extract a phase-stable envelope, then returns AC
-// RMS / DC mean. The Hann taper is essential: a bare integrator ripples at the bin-
-// straddle frequency for any non-integer-cycle window, masquerading as modulation.
-// 0 = stable, ~0.05 = transparent, ~0.1 = perceptible roughness, ~0.3+ = obvious
-// tremolo. Returns the worst (max) depth across the supplied freqs.
+// that LSD misses. 0 = stable, ~0.05 = transparent, ~0.3+ = obvious tremolo.
 export function modulationDepth(data, freqs, sr, opts = {}) {
   let win = opts.envWindow || 2048
   let hop = opts.envHop || 256
@@ -143,9 +136,8 @@ export function modulationDepth(data, freqs, sr, opts = {}) {
   for (let i = 0; i < win; i++) { hann[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (win - 1))); hannSum += hann[i] }
 
   // Two-pass: first measure each partial's mean amplitude, then only score those
-  // above 5% of the loudest partial. Otherwise weak/absent partials (e.g. high
-  // harmonics suppressed by formant filtering) score huge spurious modulation
-  // from spectral-leakage noise.
+  // above 5% of the loudest. Otherwise weak/absent partials score huge spurious
+  // modulation from spectral-leakage noise.
   let envs = freqs.map(() => new Float64Array(frames))
   let means = new Float64Array(freqs.length)
   for (let fi = 0; fi < freqs.length; fi++) {

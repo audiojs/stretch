@@ -1,0 +1,48 @@
+{
+  "name": "@audio/stretch-sms",
+  "version": "1.0.0",
+  "description": "Sinusoidal Modeling Synthesis time stretching — harmonic/tonal material",
+  "type": "module",
+  "sideEffects": false,
+  "main": "sms.js",
+  "types": "sms.d.ts",
+  "exports": {
+    ".": "./sms.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "sms.js",
+    "sms.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0",
+    "fourier-transform": "^2.3.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "sms",
+    "sinusoidal",
+    "partial-tracking",
+    "serra",
+    "mcaulay-quatieri"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-sms",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-sms"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}

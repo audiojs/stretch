@@ -1,17 +1,17 @@
-import { ola, wsola, vocoder, phaseLock, transient, paulstretch, psola } from '../index.js'
+import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from '../index.js'
 
 let fs = 44100, dur = 5, n = fs * dur
 let data = new Float32Array(n)
 for (let i = 0; i < n; i++) data[i] = Math.sin(2 * Math.PI * 440 * i / fs) * 0.5 + Math.sin(2 * Math.PI * 880 * i / fs) * 0.3
 
 let algos = [
-  ['ola', ola, { factor: 2 }],
   ['wsola', wsola, { factor: 2 }],
-  ['vocoder', vocoder, { factor: 2 }],
-  ['phaseLock', phaseLock, { factor: 2 }],
+  ['pvoc', pvoc, { factor: 2 }],
+  ['pvocLock', pvocLock, { factor: 2 }],
   ['transient', transient, { factor: 2 }],
   ['paulstretch', paulstretch, { factor: 8 }],
   ['psola', psola, { factor: 2 }],
+  ['sms', sms, { factor: 2 }],
 ]
 
 console.log(`Benchmark: ${dur}s signal (${n} samples) @ ${fs}Hz\n`)

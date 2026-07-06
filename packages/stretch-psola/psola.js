@@ -1,21 +1,19 @@
 /**
  * Pitch-Synchronous Overlap-Add — time-domain stretch for speech/monophonic signals.
- * Detects pitch via autocorrelation, uses pitch-synchronous grains for artifact-free stretching.
- *
- * @param {Float32Array} data - mono audio samples
- * @param {{factor?: number, sampleRate?: number, minFreq?: number, maxFreq?: number}} opts
- * @returns {Float32Array} time-stretched audio
+ * Detects pitch via autocorrelation, windows grains at pitch cycle boundaries.
+ * Falls back to WSOLA on unvoiced/polyphonic segments.
  */
 
-import wsola from './wsola.js'
-import { clamp, normalize, writer } from './util.js'
+import wsola from '@audio/stretch-wsola'
+import { clamp, normalize, writer, PI2 } from '@audio/stretch-core'
 
-const PI2 = Math.PI * 2
-
+let _corr = new Float64Array(0)
 function detectPeriodRange(data, pos, minLag, maxLag, prevPeriod) {
   if (minLag > maxLag) return { period: 0, score: 0 }
 
-  let corr = new Float64Array(maxLag + 2)
+  // Reused scratch: every read this call is confined to [minLag, maxLag], all written this call.
+  if (_corr.length < maxLag + 2) _corr = new Float64Array(maxLag + 2)
+  let corr = _corr
   let n = maxLag
   // e1 = Σ data[pos+i]² — depends only on the analysis window, not lag. Hoist it out.
   let e1 = 0
@@ -41,13 +39,14 @@ function detectPeriodRange(data, pos, minLag, maxLag, prevPeriod) {
     let metric = score
     if (prevPeriod > 0) metric += 0.18 * Math.max(-1, 1 - Math.abs(Math.log(lag / prevPeriod)))
 
+    let chosen = lag
     let doubled = lag * 2
     if (doubled < maxLag && corr[doubled] >= score * 0.88 && corr[doubled] >= corr[doubled - 1] && corr[doubled] >= corr[doubled + 1]) {
       let doubledMetric = corr[doubled]
       if (prevPeriod > 0) doubledMetric += 0.18 * Math.max(-1, 1 - Math.abs(Math.log(doubled / prevPeriod)))
       if (doubledMetric > metric) {
-        lag = doubled
-        score = corr[lag]
+        chosen = doubled
+        score = corr[doubled]
         metric = doubledMetric
       }
     }
@@ -55,7 +54,7 @@ function detectPeriodRange(data, pos, minLag, maxLag, prevPeriod) {
     if (metric > bestMetric) {
       bestMetric = metric
       bestScore = score
-      best = lag
+      best = chosen
     }
   }
 
@@ -68,6 +67,11 @@ function detectPeriodRange(data, pos, minLag, maxLag, prevPeriod) {
         bestScore = corr[lag]
       }
     }
+    // A raw max with no genuine interior turning point is credible only if
+    // correlation has already turned over at the edge — still climbing into
+    // minLag/maxLag means the true period lies outside the searched range.
+    if ((best === minLag && corr[minLag] > corr[minLag + 1]) ||
+        (best === maxLag && corr[maxLag] > corr[maxLag - 1])) return { period: 0, score: 0 }
   }
 
   if (bestScore <= 0.35 || !best) return { period: 0, score: Math.max(0, bestScore) }
@@ -173,7 +177,7 @@ function smoothPeriods(periods, voiced, defP) {
     out = next
   }
 
-  let firstVoiced = out.findIndex((_, i) => voiced[i])
+  let firstVoiced = voiced.findIndex((v) => v)
   let seed = firstVoiced >= 0 ? out[firstVoiced] : defP
   let prev = seed
   for (let i = 0; i < out.length; i++) {
@@ -207,10 +211,10 @@ function pitchContour(data, minP, maxP, defP, opts = {}) {
   let cacheState = { index: 0 }
   let segmentOffset = opts.segmentOffset || 0
 
-  // Early bailout check: after a warmup window, if voicing rate is very low the signal
-  // is likely polyphonic or noisy and the full contour scan is wasted work (the caller
-  // falls through to WSOLA anyway when voicedCount < 20%). Check every `checkInterval`
-  // frames; bail when fewer than 15% of frames are voiced after at least `warmup` frames.
+  // Early bailout: after warmup, if voicing rate is very low the signal is likely
+  // polyphonic or noisy and the full contour scan is wasted work (caller falls
+  // through to WSOLA). Check every checkInterval frames; bail when <15% voiced
+  // after ≥warmup frames.
   let warmup = 16
   let checkInterval = 8
   let voicedCount = 0
@@ -238,8 +242,8 @@ function pitchContour(data, minP, maxP, defP, opts = {}) {
     }
   }
 
-  // If voicing rate is below the 20% threshold that psolaBatchCore uses, skip the
-  // expensive smoothPeriods + marks work — the caller will fall through to WSOLA anyway.
+  // If voicing rate is below the 20% threshold that psolaBatchCore uses, skip
+  // the expensive smoothPeriods + marks work — caller falls through to WSOLA.
   if (voicedCount < Math.max(4, periods.length * 0.15)) return null
 
   return { start, hop, periods: smoothPeriods(periods, voiced, defP), scores, voiced, positions }
@@ -273,15 +277,20 @@ function voicedWeight(contour, index) {
   return count ? sum / count : 0
 }
 
-function voicedWeightAt(contour, pos) {
+// Precomputed per-index weights → O(1) lerp per output sample in the blend loop.
+function voicedWeights(contour) {
+  let w = new Float64Array(contour.scores.length)
+  for (let i = 0; i < w.length; i++) w[i] = voicedWeight(contour, i)
+  return w
+}
+
+function voicedWeightAt(contour, weights, pos) {
   let x = (pos - contour.start) / contour.hop
-  if (x <= 0) return voicedWeight(contour, 0)
-  if (x >= contour.scores.length - 1) return voicedWeight(contour, contour.scores.length - 1)
+  if (x <= 0) return weights[0]
+  if (x >= weights.length - 1) return weights[weights.length - 1]
   let i = Math.floor(x)
   let frac = x - i
-  let a = voicedWeight(contour, i)
-  let b = voicedWeight(contour, i + 1)
-  return a * (1 - frac) + b * frac
+  return weights[i] * (1 - frac) + weights[i + 1] * frac
 }
 
 function findAnchor(contour) {
@@ -367,13 +376,13 @@ function marks(data, contour, minP, maxP) {
 function addGrain(data, srcPos, left, right, out, norm, dstPos) {
   left = Math.max(1, Math.round(left))
   right = Math.max(1, Math.round(right))
-  let len = left + right
   for (let i = -left; i < right; i++) {
     let si = srcPos + i
     let di = dstPos + i
     if (si < 0 || si >= data.length || di < 0 || di >= out.length) continue
-    let phase = (i + left) / len
-    let w = 0.5 * (1 - Math.cos(PI2 * phase))
+    // two half-Hann lobes meeting at the mark: window peak stays pitch-synchronous
+    // even for asymmetric grains (left !== right)
+    let w = i < 0 ? 0.5 * (1 - Math.cos(Math.PI * (i + left) / left)) : 0.5 * (1 + Math.cos(Math.PI * i / right))
     out[di] += data[si] * w
     norm[di] += w
   }
@@ -439,15 +448,18 @@ function psolaBatchCore(data, opts) {
   if (voicedCount < Math.max(4, voiced.length * 0.2)) return { out: wsola(data, { factor }), contour }
 
   let { out, norm } = render(data, outLen, factor, markPos, periods, voiced, minP, maxP)
-  if (norm.every((value) => value <= 1e-8)) return { out: wsola(data, { factor }), contour }
+  let allEmpty = true
+  for (let i = 0; i < norm.length; i++) if (norm[i] > 1e-8) { allEmpty = false; break }
+  if (allEmpty) return { out: wsola(data, { factor }), contour }
 
   normalize(out, norm)
 
   // Blend WSOLA in weakly voiced regions where pitch-synchronous grains sound brittle
   if (voicedCount < voiced.length * 0.95) {
     let noise = wsola(data, { factor })
+    let weights = voicedWeights(contour)
     for (let i = 0; i < outLen; i++) {
-      let weight = voicedWeightAt(contour, i / factor)
+      let weight = voicedWeightAt(contour, weights, i / factor)
       out[i] = out[i] * weight + noise[i] * (1 - weight)
     }
   }
@@ -465,7 +477,6 @@ function psolaStream(opts) {
   let maxP = Math.ceil(sr / (opts?.minFreq || 80))
   let batchOpts = { factor, sampleRate: sr, minFreq: opts?.minFreq, maxFreq: opts?.maxFreq }
 
-  // Segment sizing: enough for pitch contour + marks + rendering
   let segLen = Math.max(maxP * 12, 8192)
   let advance = Math.max(maxP * 8, 4096)
   let outOlap = Math.round((segLen - advance) * factor)

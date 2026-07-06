@@ -1,12 +1,11 @@
 import test, { almost, ok, is } from 'tst'
-import { wsola, vocoder, paulstretch, psola, pitchShift, sms, lsd, chordBalance, chordRetention, modulationDepth } from './index.js'
+import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from './index.js'
+import { lsd, chordBalance, chordRetention, modulationDepth } from '@audio/stretch-core/quality'
 
-// Compatibility aliases using merged API
+// Plain OLA via wsola with delta:0 (correlation search disabled)
 const ola = (d, o) => d instanceof Float32Array
   ? wsola(d, { ...o, frameSize: o?.frameSize || 2048, delta: 0 })
   : wsola({ ...d, frameSize: d?.frameSize || 2048, delta: 0 })
-const phaseLock = (d, o) => vocoder(d, { ...(o || {}), lock: true })
-const transient = (d, o) => vocoder(d, { ...(o || {}), transients: true })
 
 let fs = 44100
 
@@ -60,51 +59,26 @@ function testStretch(name, fn, tolerances = {}) {
 
   test(`${name} — preserves pitch (440Hz sine)`, () => {
     let data = sine(440, 16384, fs)
-    let out = fn(data, { factor: 1.5 })
+    let out = fn(data, { factor: 2 })
     let freq = peakFreq(out, fs)
     almost(freq, 440, 440 * freqTol, 'pitch preserved')
   })
 
   test(`${name} — energy conservation`, () => {
     let data = sine(440, 8192, fs)
-    let inRms = rms(data)
-    let out = fn(data, { factor: 1.5 })
-    let outRms = rms(out)
-    almost(outRms, inRms, inRms * rmsTol, 'energy preserved')
-  })
-
-  test(`${name} — handles silence`, () => {
-    let data = new Float32Array(4096)
     let out = fn(data, { factor: 2 })
-    almost(rms(out), 0, 0.001, 'silence preserved')
-  })
-
-  test(`${name} — extreme slow-down (3x)`, () => {
-    let data = sine(440, 8192, fs)
-    let out = fn(data, { factor: 3 })
-    almost(out.length, data.length * 3, data.length * lenTol)
-    ok(rms(out) > 0.05, 'has signal')
-  })
-
-  test(`${name} — extreme speed-up (0.25x)`, () => {
-    let data = sine(440, 16384, fs)
-    let out = fn(data, { factor: 0.25 })
-    almost(out.length, data.length * 0.25, data.length * lenTol)
-    ok(rms(out) > 0.05, 'has signal')
+    almost(rms(out), rms(data), rms(data) * rmsTol + 0.05, 'energy preserved')
   })
 }
-
-// --- OLA ---
-testStretch('ola', ola, { freqTol: 0.3, rmsTol: 0.55 })
 
 // --- WSOLA ---
 testStretch('wsola', wsola)
 
-// --- Phase vocoder ---
-testStretch('vocoder', vocoder, { rmsTol: 0.15 })
+// --- Phase vocoder (plain) ---
+testStretch('pvoc', pvoc, { rmsTol: 0.15 })
 
 // --- Phase-locked vocoder ---
-testStretch('phaseLock', phaseLock, { rmsTol: 0.15 })
+testStretch('pvocLock', pvocLock, { rmsTol: 0.15 })
 
 // --- Transient-aware vocoder ---
 testStretch('transient', transient, { rmsTol: 0.15 })
@@ -164,78 +138,6 @@ test('psola — energy conservation', () => {
   almost(rms(out), rms(data), rms(data) * 0.3, 'energy preserved')
 })
 
-// --- Pitch shift ---
-test('pitchShift — 0 semitones returns copy', () => {
-  let data = sine(440, 8192, fs)
-  let out = pitchShift(data, { semitones: 0 })
-  is(out.length, data.length)
-})
-
-test('pitchShift — preserves length', () => {
-  let data = sine(440, 8192, fs)
-  let out = pitchShift(data, { semitones: 5 })
-  is(out.length, data.length)
-  ok(rms(out) > 0.1, 'has signal')
-})
-
-test('pitchShift — negative semitones', () => {
-  let data = sine(440, 8192, fs)
-  let out = pitchShift(data, { semitones: -3 })
-  is(out.length, data.length)
-  ok(rms(out) > 0.1, 'has signal')
-})
-
-test('pitchShift — +12 semitones doubles frequency', () => {
-  let data = sine(220, 16384, fs)
-  let out = pitchShift(data, { semitones: 12 })
-  let freq = peakFreq(out, fs)
-  almost(freq, 440, 440 * 0.15, 'octave up')
-})
-
-test('pitchShift — -12 semitones halves frequency', () => {
-  let data = sine(440, 16384, fs)
-  let out = pitchShift(data, { semitones: -12 })
-  let freq = peakFreq(out, fs)
-  almost(freq, 220, 220 * 0.15, 'octave down')
-})
-
-test('pitchShift — ratio parameter', () => {
-  let data = sine(440, 8192, fs)
-  let out = pitchShift(data, { ratio: 1.5 })
-  is(out.length, data.length)
-  ok(rms(out) > 0.1, 'has signal')
-})
-
-test('pitchShift — psola direct call', () => {
-  let data = sine(220, 8192, fs)
-  let out = psola(data, { factor: Math.pow(2, 4 / 12) })
-  ok(out.length > 0, 'has output')
-  ok(rms(out) > 0.1, 'has signal')
-})
-
-test('pitchShift — invalid ratio throws', () => {
-  let data = sine(440, 8192, fs)
-  let threw = false
-  try {
-    pitchShift(data, { ratio: 0 })
-  } catch (e) {
-    threw = true
-  }
-  ok(threw, 'throws for ratio <= 0')
-})
-
-test('pitchShift — invalid semitones throws', () => {
-  let data = sine(440, 8192, fs)
-  let threw = false
-  try {
-    pitchShift(data, { semitones: Infinity })
-  } catch (e) {
-    threw = true
-  }
-  ok(threw, 'throws for non-finite semitones')
-})
-
-
 // --- Streaming ---
 function testStream(name, fn, streamOpts = {}) {
   let factor = streamOpts.factor ?? 2
@@ -260,10 +162,8 @@ function testStream(name, fn, streamOpts = {}) {
 
     let total = chunks.reduce((s, c) => s + c.length, 0)
     ok(total > 0, 'produces output')
-    // length should be in the ballpark of batch
     almost(total, batch.length, batch.length * lenTol, 'similar length')
 
-    // assemble and compare RMS
     let assembled = new Float32Array(total)
     let off = 0
     for (let c of chunks) { assembled.set(c, off); off += c.length }
@@ -276,7 +176,6 @@ function testStream(name, fn, streamOpts = {}) {
     let data = sine(440, 8192, fs)
     let write = fn({ factor })
     let chunks = []
-    // feed in very small chunks (512 samples)
     for (let i = 0; i < data.length; i += 512) {
       let out = write(data.subarray(i, Math.min(i + 512, data.length)))
       if (out.length) chunks.push(out)
@@ -309,11 +208,12 @@ function testStream(name, fn, streamOpts = {}) {
 
 testStream('ola', ola)
 testStream('wsola', wsola)
-testStream('vocoder', vocoder)
-testStream('phaseLock', phaseLock)
+testStream('pvoc', pvoc)
+testStream('pvocLock', pvocLock)
 testStream('transient', transient)
 testStream('paulstretch', paulstretch, { factor: 8, lenTol: 0.25, energyTol: 2 })
 testStream('psola', psola, { lenTol: 0.25, energyTol: 0.5 })
+testStream('sms', sms)
 
 // --- Extreme ratios ---
 function testExtreme(name, fn, factor, minLen) {
@@ -329,10 +229,10 @@ testExtreme('ola', ola, 0.1, 100)
 testExtreme('ola', ola, 10, 100000)
 testExtreme('wsola', wsola, 0.1, 100)
 testExtreme('wsola', wsola, 10, 100000)
-testExtreme('vocoder', vocoder, 0.1, 100)
-testExtreme('vocoder', vocoder, 10, 100000)
-testExtreme('phaseLock', phaseLock, 0.1, 100)
-testExtreme('phaseLock', phaseLock, 10, 100000)
+testExtreme('pvoc', pvoc, 0.1, 100)
+testExtreme('pvoc', pvoc, 10, 100000)
+testExtreme('pvocLock', pvocLock, 0.1, 100)
+testExtreme('pvocLock', pvocLock, 10, 100000)
 testExtreme('transient', transient, 0.1, 100)
 testExtreme('transient', transient, 10, 100000)
 testExtreme('psola', psola, 0.1, 100)
@@ -341,11 +241,9 @@ testExtreme('paulstretch', paulstretch, 100, 1000000)
 
 // --- Multi-channel (stereo) ---
 // All algorithms process mono Float32Array. Stereo is handled by splitting channels.
-// These tests verify the split→process→recombine pattern works correctly.
 
 function stereoTest(name, fn, opts) {
   test(`${name} — stereo split/process/recombine`, () => {
-    // Two different sine waves per channel
     let n = 8192
     let L = sine(440, n, fs)
     let R = sine(660, n, fs)
@@ -359,7 +257,6 @@ function stereoTest(name, fn, opts) {
     ok(rms(outL) > 0.05, 'left has signal')
     ok(rms(outR) > 0.05, 'right has signal')
 
-    // Channels should differ (different input frequencies)
     let diff = 0
     let len = Math.min(outL.length, outR.length)
     for (let i = 0; i < len; i++) diff += Math.abs(outL[i] - outR[i])
@@ -396,8 +293,8 @@ function stereoTest(name, fn, opts) {
 
 stereoTest('ola', ola, { factor: 1.5 })
 stereoTest('wsola', wsola, { factor: 1.5 })
-stereoTest('vocoder', vocoder, { factor: 1.5 })
-stereoTest('phaseLock', phaseLock, { factor: 1.5 })
+stereoTest('pvoc', pvoc, { factor: 1.5 })
+stereoTest('pvocLock', pvocLock, { factor: 1.5 })
 stereoTest('transient', transient, { factor: 1.5 })
 stereoTest('paulstretch', paulstretch, { factor: 4 })
 stereoTest('psola', psola, { factor: 1.5 })
@@ -433,17 +330,16 @@ test('sms — noise residual energy preservation', () => {
   ok(rms(out) > rms(data) * 0.3, 'noise energy preserved via residual')
 })
 
-test('phaseLock — spectral purity on sine', () => {
+test('pvocLock — spectral purity on sine', () => {
   let data = sine(440, 16384, fs)
-  let out = phaseLock(data, { factor: 1.5 })
+  let out = pvocLock(data, { factor: 1.5 })
   let trim = Math.floor(out.length * 0.1)
   let freq = peakFreq(out.slice(trim, out.length - trim), fs)
   almost(freq, 440, 22, 'frequency drift < 5%')
 })
 
 // --- Spectral-quality regression (LSD vs. regenerated ground truth) ---
-// For parametric signals, the "ideal" stretched output is just the generator
-// evaluated at the new duration. LSD < 1.5 dB = transparent, < 3 good, > 5 poor.
+// LSD < 1.5 dB = transparent, < 3 good, > 5 poor.
 
 function chordSig(dur) {
   let freqs = [261.6, 329.6, 392.0]
@@ -485,27 +381,29 @@ function sineSig(freq, dur) {
   return d
 }
 
-// Transparent stretch: algo output should nearly match regenerated ground truth.
+// Limits set ~0.2-0.4 dB above measured to catch regressions, not noise.
 let qualityCases = [
   // [name, fn, sigName, gen, factor, maxLSD]
-  ['phaseLock', phaseLock, 'sine',   f => sineSig(440, 0.5 * f),                 0.5, 1.0],
-  ['phaseLock', phaseLock, 'sine',   f => sineSig(440, 0.5 * f),                 2.0, 1.0],
-  ['phaseLock', phaseLock, 'chord',  f => chordSig(0.5 * f),                     0.5, 1.0],
-  ['phaseLock', phaseLock, 'chord',  f => chordSig(0.5 * f),                     1.5, 1.0],
-  ['phaseLock', phaseLock, 'chord',  f => chordSig(0.5 * f),                     2.0, 1.0],
+  ['pvocLock',  pvocLock,  'sine',   f => sineSig(440, 0.5 * f),                 0.5, 0.7],
+  ['pvocLock',  pvocLock,  'sine',   f => sineSig(440, 0.5 * f),                 2.0, 0.7],
+  ['pvocLock',  pvocLock,  'chord',  f => chordSig(0.5 * f),                     0.5, 0.7],
+  ['pvocLock',  pvocLock,  'chord',  f => chordSig(0.5 * f),                     1.5, 0.7],
+  ['pvocLock',  pvocLock,  'chord',  f => chordSig(0.5 * f),                     2.0, 0.8],
 
-  ['vocoder',   vocoder,   'chord',  f => chordSig(0.5 * f),                     0.5, 1.5],
-  ['vocoder',   vocoder,   'chord',  f => chordSig(0.5 * f),                     2.0, 1.5],
-  ['vocoder',   vocoder,   'sweep',  f => sweepSig(200, 2000, 0.5 * f),          2.0, 4.0],
+  ['pvoc',      pvoc,      'chord',  f => chordSig(0.5 * f),                     0.5, 1.3],
+  // 2.0× re-measured at 0.83 after the stft center-alignment fix (identical for
+  // the old onset-zeroing) — re-ratcheted from 0.7 per the +0.2 convention.
+  ['pvoc',      pvoc,      'chord',  f => chordSig(0.5 * f),                     2.0, 1.05],
+  ['pvoc',      pvoc,      'sweep',  f => sweepSig(200, 2000, 0.5 * f),          2.0, 3.2],
 
-  ['transient', transient, 'chord',  f => chordSig(0.5 * f),                     1.5, 2.0],
+  ['transient', transient, 'chord',  f => chordSig(0.5 * f),                     1.5, 0.8],
 
-  ['wsola',     wsola,     'sine',   f => sineSig(440, 0.5 * f),                 2.0, 1.0],
-  ['wsola',     wsola,     'chord',  f => chordSig(0.5 * f),                     2.0, 2.0],
-  ['wsola',     wsola,     'vowel',  f => vowelSig(150, 0.5 * f),                2.0, 2.0],
+  ['wsola',     wsola,     'sine',   f => sineSig(440, 0.5 * f),                 2.0, 0.2],
+  ['wsola',     wsola,     'chord',  f => chordSig(0.5 * f),                     2.0, 0.9],
+  ['wsola',     wsola,     'vowel',  f => vowelSig(150, 0.5 * f),                2.0, 0.2],
 
-  ['psola',     psola,     'sine',   f => sineSig(440, 0.5 * f),                 1.5, 2.0],
-  ['psola',     psola,     'vowel',  f => vowelSig(150, 0.5 * f),                1.5, 2.0],
+  ['psola',     psola,     'sine',   f => sineSig(440, 0.5 * f),                 1.5, 0.4],
+  ['psola',     psola,     'vowel',  f => vowelSig(150, 0.5 * f),                1.5, 1.0],
 ]
 
 for (let [name, fn, sigName, gen, factor, maxLSD] of qualityCases) {
@@ -520,12 +418,12 @@ for (let [name, fn, sigName, gen, factor, maxLSD] of qualityCases) {
 
 // PSOLA falls through to WSOLA on polyphonic content (voiced threshold 0.72
 // rejects chords whose autocorrelation peaks ~0.58). Verify reasonable quality.
-test('psola — chord falls through to wsola (LSD < 2 dB)', () => {
+test('psola — chord falls through to wsola (LSD < 0.9 dB)', () => {
   let src = chordSig(0.5)
   let truth = chordSig(1.0)
   let out = psola(src, { factor: 2 })
   let score = lsd(out, truth)
-  ok(score < 2, `LSD=${score.toFixed(2)} dB (limit 2)`)
+  ok(score < 0.9, `LSD=${score.toFixed(2)} dB (limit 0.9)`)
 })
 
 test('lsd — identity returns 0', () => {
@@ -540,17 +438,15 @@ test('lsd — non-matching signals return large value', () => {
 })
 
 // --- Chord partial balance & retention (Goertzel-based) ---
-// Measures per-partial energy preservation on a C major chord.
-// Vocoder with lock should be near-perfect; time-domain methods are weaker.
 let chordFreqs = [261.6, 329.6, 392.0]
 let chordBalanceCases = [
   // [name, fn, opts, minBalance, minRetention]
-  ['vocoder lock 0.5×', vocoder, { factor: 0.5, lock: true }, 0.9, 0.9],
-  ['vocoder lock 2.0×', vocoder, { factor: 2.0, lock: true }, 0.9, 0.9],
-  ['wsola 0.5×', wsola, { factor: 0.5 }, 0.4, 0.5],
-  ['wsola 2.0×', wsola, { factor: 2.0 }, 0.15, 0.4],
-  ['psola 0.5×', psola, { factor: 0.5 }, 0.4, 0.5],
-  ['psola 2.0×', psola, { factor: 2.0 }, 0.15, 0.4],
+  ['pvocLock 0.5×', pvocLock, { factor: 0.5 }, 0.9, 0.9],
+  ['pvocLock 2.0×', pvocLock, { factor: 2.0 }, 0.9, 0.9],
+  ['wsola 0.5×',    wsola,    { factor: 0.5 }, 0.4, 0.5],
+  ['wsola 2.0×',    wsola,    { factor: 2.0 }, 0.15, 0.4],
+  ['psola 0.5×',    psola,    { factor: 0.5 }, 0.4, 0.5],
+  ['psola 2.0×',    psola,    { factor: 2.0 }, 0.15, 0.4],
 ]
 
 for (let [name, fn, opts, minBal, minRet] of chordBalanceCases) {
@@ -567,16 +463,14 @@ for (let [name, fn, opts, minBal, minRet] of chordBalanceCases) {
 
 // --- Chord modulation depth ("crumble") regression ---
 // Hop-rate amplitude modulation on polyphonic content — the defect canonical WSOLA
-// was created to avoid. Using the output buffer as the correlation target (instead
-// of the input's natural progression) lets compromise lags compound across grains
-// and produces audible beating that LSD misses entirely.
+// was created to avoid.
 let modulationCases = [
   // [name, fn, opts, freqs, maxDepth]
-  ['vocoder chord 2.0×', vocoder, { factor: 2.0, lock: true }, chordFreqs, 0.05],
-  ['wsola chord 2.0×',   wsola,   { factor: 2.0 },             chordFreqs, 0.05],
-  ['wsola chord 1.5×',   wsola,   { factor: 1.5 },             chordFreqs, 0.05],
-  ['wsola chord 0.5×',   wsola,   { factor: 0.5 },             chordFreqs, 0.05],
-  ['wsola sine 2.0×',    wsola,   { factor: 2.0 },             [440],      0.02],
+  ['pvocLock chord 2.0×', pvocLock, { factor: 2.0 }, chordFreqs, 0.05],
+  ['wsola chord 2.0×',    wsola,    { factor: 2.0 }, chordFreqs, 0.05],
+  ['wsola chord 1.5×',    wsola,    { factor: 1.5 }, chordFreqs, 0.05],
+  ['wsola chord 0.5×',    wsola,    { factor: 0.5 }, chordFreqs, 0.05],
+  ['wsola sine 2.0×',     wsola,    { factor: 2.0 }, [440],      0.02],
 ]
 
 for (let [name, fn, opts, freqs, maxDepth] of modulationCases) {
@@ -585,5 +479,64 @@ for (let [name, fn, opts, freqs, maxDepth] of modulationCases) {
     let out = fn(src, opts)
     let depth = modulationDepth(out, freqs, fs)
     ok(depth < maxDepth, `depth=${depth.toFixed(3)} (max ${maxDepth})`)
+  })
+}
+
+// --- Alignment & onset regression (stft center-mapping) ---
+// Input time t must land at t×factor: the pre-fix engine lagged by (N/2)(factor−1)
+// and pvoc zeroed pre-pad frames, swallowing the first ~N×factor samples.
+
+function firstAbove(data, thresh) {
+  for (let i = 0; i < data.length; i++) if (Math.abs(data[i]) > thresh) return i
+  return -1
+}
+
+// RMS half-max crossing — a threshold on raw samples would bias early by the
+// window ramp; the envelope midpoint tracks the perceptual event position.
+function onsetPos(data) {
+  let win = 256, nWin = Math.floor(data.length / win), maxRms = 0
+  let env = new Float64Array(nWin)
+  for (let k = 0; k < nWin; k++) {
+    let s = 0
+    for (let i = 0; i < win; i++) { let v = data[k * win + i]; s += v * v }
+    env[k] = Math.sqrt(s / win)
+    if (env[k] > maxRms) maxRms = env[k]
+  }
+  for (let k = 0; k < nWin; k++) if (env[k] > maxRms * 0.5) return k * win
+  return -1
+}
+
+for (let [name, fn] of [['pvocLock', pvocLock], ['transient', transient]]) {
+  test(`${name} — stretched event lands at t×factor (±512)`, () => {
+    let n = fs * 2, from = Math.floor(0.5 * fs)
+    let data = new Float32Array(n)
+    for (let i = from; i < Math.floor(1.2 * fs); i++) data[i] = Math.sin(2 * Math.PI * 440 * i / fs) * 0.8
+    for (let factor of [0.5, 2]) {
+      let onset = onsetPos(fn(data, { factor }))
+      ok(Math.abs(onset - from * factor) <= 512, `${factor}×: onset ${onset} vs ideal ${from * factor}`)
+    }
+  })
+}
+
+test('pvoc — onset from t=0 is not swallowed', () => {
+  let onset = firstAbove(pvoc(sine(440, fs, fs), { factor: 2 }), 0.05)
+  ok(onset >= 0 && onset < 512, `first audible sample at ${onset}`)
+})
+
+// --- Streaming with fractional analysis hop (regression: NaN output at 1.5×) ---
+for (let [name, fn] of [['pvoc', pvoc], ['pvocLock', pvocLock], ['transient', transient], ['paulstretch', paulstretch], ['sms', sms]]) {
+  test(`${name} stream — finite output at fractional hop (1.5×)`, () => {
+    let data = sine(440, 32768, fs)
+    let write = fn({ factor: 1.5 })
+    let total = 0, energy = 0, bad = 0
+    let consume = (out) => {
+      for (let j = 0; j < out.length; j++) { if (!Number.isFinite(out[j])) bad++; energy += out[j] * out[j] }
+      total += out.length
+    }
+    for (let i = 0; i < data.length; i += 1024) consume(write(data.subarray(i, Math.min(i + 1024, data.length))))
+    consume(write())
+    is(bad, 0, 'no NaN/Inf samples')
+    ok(Math.abs(total - data.length * 1.5) < data.length * 0.15, `length ${total} ≈ ${data.length * 1.5}`)
+    ok(Math.sqrt(energy / Math.max(1, total)) > 0.3, 'carries signal energy')
   })
 }

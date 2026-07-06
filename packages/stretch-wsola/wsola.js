@@ -1,15 +1,15 @@
-import { hannWindow, writer, makeStreamBufs } from './util.js'
+import { hannWindow, writer, makeStreamBufs } from '@audio/stretch-core'
 
-// Canonical Verhelst-Roelands WSOLA: each grain's read position is chosen to maximize
-// cross-correlation with the *natural progression* of the previous grain through the
-// input — i.e. data[prevRead + synHop : ...]. Correlating against the synthesis output
-// (a sum of previous compromise grains) lets phase errors compound across grains and
-// causes hop-rate amplitude modulation ("crumble") on polyphonic content. The input
-// target is clean and gives the same result for monophonic signals at no extra cost.
+// Canonical Verhelst-Roelands WSOLA: each grain's read position maximizes cross-
+// correlation with the *natural progression* of the previous grain through the
+// input — i.e. data[prevRead + synHop : ...]. Correlating against the synthesis
+// output (a sum of previous compromise grains) lets phase errors compound across
+// grains and causes hop-rate amplitude modulation ("crumble") on polyphonic
+// content. The input target is clean and gives the same result for monophonic
+// signals at no extra cost.
 function corrLength(frameSize, synHop) {
-  // Overlap region. For large frames (≥2048) cap at frameSize/2 — the Hann taper
-  // makes outer samples low-energy so they barely shift the correlation peak,
-  // and halving the loop cuts search cost by ~33%.
+  // Hann taper on large frames makes outer samples low-energy — halving the
+  // loop (≥2048 frames) cuts search cost ~33% without shifting the peak.
   return frameSize >= 2048 ? frameSize >> 1 : frameSize - synHop
 }
 
@@ -33,17 +33,21 @@ export default function wsola(data, opts) {
   let win = hannWindow(frameSize)
   let corrLen = corrLength(frameSize, synHop)
 
+  // Cap the read position at the last index a full real frame can start from —
+  // once analysis would run past it, keep re-aligning (via search) within that
+  // final frame instead of abandoning synthesis before outLen is covered.
+  let maxRead = Math.max(0, inLen - frameSize)
+
   let anaPos = 0, synPos = 0
   let prevReadPos = 0
 
-  while (synPos + frameSize <= outLen) {
-    let nomPos = Math.round(anaPos)
+  while (synPos < outLen) {
+    let nomPos = Math.min(Math.round(anaPos), maxRead)
     let readPos = nomPos
 
     if (synPos > 0 && delta > 0) {
       let searchStart = Math.max(0, nomPos - delta)
-      let searchEnd = Math.min(inLen - frameSize, nomPos + delta)
-      if (searchEnd < searchStart) break
+      let searchEnd = Math.min(maxRead, nomPos + delta)
 
       let targetStart = prevReadPos + synHop
       let L = Math.min(corrLen, inLen - targetStart, inLen - searchEnd)
@@ -59,10 +63,8 @@ export default function wsola(data, opts) {
       }
     }
 
-    if (readPos + frameSize > inLen) break
-
     for (let i = 0; i < frameSize && synPos + i < outLen; i++) {
-      out[synPos + i] += data[readPos + i] * win[i]
+      out[synPos + i] += (readPos + i < inLen ? data[readPos + i] : 0) * win[i]
       norm[synPos + i] += win[i]
     }
 
@@ -92,15 +94,21 @@ function wsolaStream(opts) {
   let prevReadAbs = 0
   let inOffset = 0  // absolute position of ib[0]
 
-  function run() {
-    while (Math.round(aPos) + frameSize <= st.il) {
-      let nomPos = Math.round(aPos)
+  // `final` mirrors the batch function's synPos<outLen: keep re-aligning within
+  // the final real frame (nomPos capped at maxRead) until analysis has nominally
+  // caught up with all buffered input, instead of stopping early because the
+  // *uncapped* aPos+frameSize no longer fits — that premature stop is correct
+  // behavior mid-stream (wait for more chunks) but wrong at flush (no more chunks
+  // are coming, so the tail must still be covered).
+  function run(final) {
+    let maxRead = Math.max(0, st.il - frameSize)
+    while (final ? Math.round(aPos) < st.il : Math.round(aPos) + frameSize <= st.il) {
+      let nomPos = Math.min(Math.round(aPos), maxRead)
       let readPos = nomPos
 
       if (st.pos > 0 && delta > 0) {
         let searchS = Math.max(0, nomPos - delta)
-        let searchE = Math.min(st.il - frameSize, nomPos + delta)
-        if (searchE < searchS) break
+        let searchE = Math.min(maxRead, nomPos + delta)
         let targetStart = (prevReadAbs - inOffset) + synHop
         let L = Math.min(corrLen, st.il - targetStart, st.il - searchE)
         if (targetStart >= 0 && L > 0) {
@@ -116,12 +124,10 @@ function wsolaStream(opts) {
         }
       }
 
-      if (readPos + frameSize > st.il) break
-
       st.growOut(st.pos + frameSize)
       let ob = st.ob, nb = st.nb, base = st.pos, ib = st.ib
       for (let i = 0; i < frameSize; i++) {
-        ob[base + i] += ib[readPos + i] * win[i]
+        ob[base + i] += (readPos + i < st.il ? ib[readPos + i] : 0) * win[i]
         nb[base + i] += win[i]
       }
       prevReadAbs = inOffset + readPos
@@ -140,11 +146,11 @@ function wsolaStream(opts) {
   return {
     write(chunk) {
       st.appendIn(chunk)
-      run()
+      run(false)
       return st.take(Math.max(0, st.pos - frameSize + synHop))
     },
     flush() {
-      run()
+      run(true)
       return st.take(st.pos)
     }
   }

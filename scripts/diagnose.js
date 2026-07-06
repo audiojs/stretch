@@ -2,8 +2,11 @@
  * Diagnostic: compare OLA/PSOLA against rubberband reference + detect specific defects.
  * Usage: node diagnose.js
  */
-import { ola, wsola, psola, phaseLock } from '../index.js'
-import { hannWindow } from '../util.js'
+import { wsola, psola, pvocLock } from '../index.js'
+import { hannWindow } from '@audio/stretch-core'
+
+// Plain OLA via wsola with delta:0 (correlation search disabled)
+const ola = (d, o) => wsola(d, { ...o, delta: 0 })
 import { execSync } from 'child_process'
 import { writeFileSync, readFileSync, unlinkSync, mkdirSync } from 'fs'
 

@@ -190,26 +190,36 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
 <script type="importmap">
 {
   "imports": {
-    "fourier-transform": "https://esm.sh/fourier-transform",
-    "time-stretch": "./index.js"
+    "fourier-transform": "https://esm.sh/fourier-transform@2.3.0",
+    "fourier-transform/stft": "https://esm.sh/fourier-transform@2.3.0/stft.js",
+    "@audio/stretch-core": "./packages/stretch-core/index.js",
+    "@audio/stretch-core/quality": "./packages/stretch-core/quality.js",
+    "@audio/stretch-wsola": "./packages/stretch-wsola/wsola.js",
+    "@audio/stretch-pvoc": "./packages/stretch-pvoc/pvoc.js",
+    "@audio/stretch-pvoc-lock": "./packages/stretch-pvoc-lock/pvoc-lock.js",
+    "@audio/stretch-transient": "./packages/stretch-transient/transient.js",
+    "@audio/stretch-paulstretch": "./packages/stretch-paulstretch/paulstretch.js",
+    "@audio/stretch-psola": "./packages/stretch-psola/psola.js",
+    "@audio/stretch-sms": "./packages/stretch-sms/sms.js",
+    "@audio/stretch": "./index.js"
   }
 }
 </script>
 <script type="module">
-import { wsola, vocoder, paulstretch, psola, sms } from 'time-stretch'
+import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from '@audio/stretch'
 
 const SR = 44100
 const PI2 = Math.PI * 2
 const FACTORS = [0.5, 1.5, 2]
 let waveMode = 'raw'
 const ALGOS = [
-  { name: 'wsola',               fn: wsola,       tag: 'WSOLA' },
-  { name: 'vocoder',             fn: vocoder,     tag: 'spectral' },
-  { name: 'vocoder+lock',        fn: vocoder,     tag: 'spectral', opts: fi => ({ factor: FACTORS[fi], lock: true }) },
-  { name: 'vocoder+transients',  fn: vocoder,     tag: 'spectral', opts: fi => ({ factor: FACTORS[fi], transients: true }) },
-  { name: 'paulstretch',         fn: paulstretch, tag: 'spectral', stretchOnly: true },
-  { name: 'psola',               fn: psola,       tag: 'pitch-sync', needsSR: true },
-  { name: 'sms',                 fn: sms,         tag: 'sinusoidal' },
+  { name: 'wsola',       fn: wsola,       tag: 'WSOLA' },
+  { name: 'pvoc',        fn: pvoc,        tag: 'spectral' },
+  { name: 'pvocLock',    fn: pvocLock,    tag: 'spectral' },
+  { name: 'transient',   fn: transient,   tag: 'spectral' },
+  { name: 'paulstretch', fn: paulstretch, tag: 'spectral', stretchOnly: true },
+  { name: 'psola',       fn: psola,       tag: 'pitch-sync', needsSR: true },
+  { name: 'sms',         fn: sms,         tag: 'sinusoidal' },
 ]
 
 // ── signal generators ─────────────────────

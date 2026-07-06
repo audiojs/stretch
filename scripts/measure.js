@@ -1,5 +1,6 @@
-// Measure WSOLA quality + perf on chord/voice/sine. Run before/after a change to compare.
-import { wsola, vocoder, lsd, chordRetention, chordBalance, modulationDepth } from '../index.js'
+// Measure quality + perf on chord/voice/sine. Run before/after a change to compare.
+import { wsola, pvocLock } from '../index.js'
+import { lsd, chordRetention, chordBalance, modulationDepth } from '@audio/stretch-core/quality'
 
 let fs = 44100
 
@@ -66,8 +67,8 @@ let cases = [
   ['wsola chord 0.5×   ', wsola,   { factor: 0.5 }, chordSig, chordFreqs],
   ['wsola vowel 2.0×   ', wsola,   { factor: 2.0 }, d => vowelSig(150, d), vowelHarmonics],
   ['wsola sine  2.0×   ', wsola,   { factor: 2.0 }, d => sineSig(440, d), [440]],
-  ['vocoder chord 2.0×', vocoder, { factor: 2.0, lock: true }, chordSig, chordFreqs],
-  ['vocoder vowel 2.0×', vocoder, { factor: 2.0, lock: true }, d => vowelSig(150, d), vowelHarmonics],
+  ['pvocLock chord 2.0×', pvocLock, { factor: 2.0 }, chordSig, chordFreqs],
+  ['pvocLock vowel 2.0×', pvocLock, { factor: 2.0 }, d => vowelSig(150, d), vowelHarmonics],
 ]
 
 let dur = 1.0

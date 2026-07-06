@@ -1,38 +1,28 @@
 {
-  "name": "time-stretch",
-  "version": "1.2.1",
+  "name": "@audio/stretch",
+  "version": "2.0.0",
   "type": "module",
   "types": "index.d.ts",
-  "description": "Time stretching and pitch shifting: WSOLA, phase vocoder, phase-locked vocoder, transient-aware, PaulStretch, PSOLA, SMS",
+  "description": "Time stretching — umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
   "sideEffects": false,
+  "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./wsola": "./wsola.js",
-    "./vocoder": "./vocoder.js",
-    "./paulstretch": "./paulstretch.js",
-    "./psola": "./psola.js",
-    "./pitch-shift": "./pitch-shift.js",
-    "./sms": "./sms.js",
-    "./quality": "./quality.js",
-    "./util": "./util.js"
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
-    "wsola.js",
-    "vocoder.js",
-    "paulstretch.js",
-    "psola.js",
-    "pitch-shift.js",
-    "sms.js",
-    "stft.js",
-    "quality.js",
-    "util.js",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE"
+  ],
+  "workspaces": [
+    "packages/*"
   ],
   "scripts": {
     "test": "node test.js",
     "test:browser": "node test/browser.js",
-    "test:all": "npm test && npm run test:browser"
+    "test:all": "npm test --workspaces --if-present && npm test && npm run test:browser",
+    "publish:all": "npm publish --workspaces && npm publish"
   },
   "repository": {
     "type": "git",
@@ -41,8 +31,6 @@
   "keywords": [
     "time-stretch",
     "time-stretching",
-    "pitch-shift",
-    "pitch-shifting",
     "wsola",
     "phase-vocoder",
     "phase-locking",
@@ -52,7 +40,6 @@
     "sms",
     "sinusoidal",
     "tempo",
-    "speed",
     "audio",
     "dsp",
     "signal-processing"
@@ -67,7 +54,14 @@
     "node": ">=18"
   },
   "dependencies": {
-    "fourier-transform": "^2.0.0"
+    "@audio/stretch-core": "^1.0.0",
+    "@audio/stretch-paulstretch": "^1.0.0",
+    "@audio/stretch-psola": "^1.0.0",
+    "@audio/stretch-pvoc": "^1.0.0",
+    "@audio/stretch-pvoc-lock": "^1.0.0",
+    "@audio/stretch-sms": "^1.0.0",
+    "@audio/stretch-transient": "^1.0.0",
+    "@audio/stretch-wsola": "^1.0.0"
   },
   "devDependencies": {
     "audio-lena": "^3.0.0",

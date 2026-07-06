@@ -1,0 +1,47 @@
+{
+  "name": "@audio/stretch-pvoc-lock",
+  "version": "1.0.0",
+  "description": "Phase-locked vocoder (Laroche & Dolson 1999) — eliminates phasiness of plain pvoc",
+  "type": "module",
+  "sideEffects": false,
+  "main": "pvoc-lock.js",
+  "types": "pvoc-lock.d.ts",
+  "exports": {
+    ".": "./pvoc-lock.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "pvoc-lock.js",
+    "pvoc-lock.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0",
+    "fourier-transform": "^2.3.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "phase-vocoder",
+    "pvoc",
+    "phase-locking",
+    "stft"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-pvoc-lock",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-pvoc-lock"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -4,11 +4,10 @@
  *
  * Usage: node compare.js
  */
-import { wsola, vocoder, paulstretch, psola, sms, lsd } from '../index.js'
+import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from '../index.js'
+import { lsd } from '@audio/stretch-core/quality'
 
 const ola = (d, o) => wsola(d, { ...(o || {}), frameSize: (o && o.frameSize) || 2048, delta: 0 })
-const phaseLock = (d, o) => vocoder(d, { ...(o || {}), lock: true })
-const transient = (d, o) => vocoder(d, { ...(o || {}), transients: true })
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
@@ -356,8 +355,8 @@ let signals = [
 let internalRows = [
   { name: 'ola', fn: ola },
   { name: 'wsola', fn: wsola },
-  { name: 'vocoder', fn: vocoder },
-  { name: 'phaseLock', fn: phaseLock },
+  { name: 'pvoc', fn: pvoc },
+  { name: 'pvocLock', fn: pvocLock },
   { name: 'transient', fn: transient },
   { name: 'psola', fn: psola },
   { name: 'sms', fn: sms },
@@ -375,7 +374,7 @@ let externalRows = {
 let pairRefs = {
   ola: 'ola',
   wsola: 'wsola',
-  vocoder: 'phasevocoder',
+  pvoc: 'phasevocoder',
   psola: 'tdpsola',
 }
 

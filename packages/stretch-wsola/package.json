@@ -1,0 +1,45 @@
+{
+  "name": "@audio/stretch-wsola",
+  "version": "1.0.0",
+  "description": "WSOLA time stretching — time-domain, low CPU, great for speech",
+  "type": "module",
+  "sideEffects": false,
+  "main": "wsola.js",
+  "types": "wsola.d.ts",
+  "exports": {
+    ".": "./wsola.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "wsola.js",
+    "wsola.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "wsola",
+    "tempo",
+    "speech"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-wsola",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-wsola"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}

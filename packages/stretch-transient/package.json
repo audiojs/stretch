@@ -1,0 +1,47 @@
+{
+  "name": "@audio/stretch-transient",
+  "version": "1.0.0",
+  "description": "Transient-aware phase-locked vocoder (Röbel 2003) — preserves attacks on drums and plucks",
+  "type": "module",
+  "sideEffects": false,
+  "main": "transient.js",
+  "types": "transient.d.ts",
+  "exports": {
+    ".": "./transient.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "transient.js",
+    "transient.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0",
+    "fourier-transform": "^2.3.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "phase-vocoder",
+    "transient",
+    "onset",
+    "stft"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-transient",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-transient"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}
