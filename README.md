@@ -8,7 +8,9 @@ Time stretching algorithms — umbrella over `@audio/stretch-*` atoms.
 | [`@audio/stretch-psola`](#psola) | PSOLA | time | ★★★★ | medium | speech, monophonic instruments |
 | [`@audio/stretch-pvoc`](#pvoc) | plain phase vocoder | freq | ★★ | medium | educational baseline |
 | [`@audio/stretch-pvoc-lock`](#pvoc-lock) | phase-locked vocoder | freq | ★★★★ | medium | general music |
+| [`@audio/stretch-pghi`](#pghi) | phase-gradient vocoder | freq | ★★★★ | medium | vibrato, glides, chirps |
 | [`@audio/stretch-transient`](#transient) | transient-aware vocoder | freq | ★★★★★ | medium | music with percussion |
+| [`@audio/stretch-hybrid`](#hybrid) | HPSS hybrid | freq+time | ★★★★ | high | full mixes — drums over tonal |
 | [`@audio/stretch-paulstretch`](#paulstretch) | PaulStretch | freq | — | medium | extreme stretch (ambient, drones) |
 | [`@audio/stretch-sms`](#sms) | Sinusoidal Modeling | sinusoidal | ★★★★ | high | harmonic / tonal material |
 
@@ -131,6 +133,27 @@ Same options as [`pvoc`](#pvoc).
 **Not for:** Percussive material where attacks matter — use [`transient`](#transient).
 
 
+### `pghi` — `@audio/stretch-pghi`
+
+Phase Gradient Heap Integration — "Phase Vocoder Done Right" (Průša & Holighaus, 2017). Synthesis phase is integrated from the analysis phase gradients, visiting bins in magnitude order via a max-heap: no peak picking, no transient heuristics; chirps, vibrato and glides stay coherent by construction.
+
+```js
+import pghi from '@audio/stretch-pghi'
+
+pghi(data, { factor: 2 })
+```
+
+| Param | Default | |
+|---|---|---|
+| `factor` | `1` | Time stretch ratio |
+| `frameSize` | `2048` | FFT size (power of 2) |
+| `hopSize` | `frameSize/8` | Hop — gradient integration wants dense frames |
+| `tolerance` | `1e-6` | Bins below `tolerance×max` get random phase |
+
+**Use when:** modulated material — vibrato, glissandi, pitch-unstable sources.<br>
+**Not for:** steady polyphony — [`pvoc-lock`](#pvoc-lock)'s identity locking reproduces intra-partial phases exactly where gradient integration only approximates them.
+
+
 ### `transient` — `@audio/stretch-transient`
 
 Transient-aware phase-locked vocoder (Röbel, 2003). Measures spectral flux between frames; on a sharp onset it resets to the original analysis phase instead of propagating it, preserving attack sharpness on drums and plucks. Implies phase locking.
@@ -151,6 +174,28 @@ transient(data, { factor: 1.5, transientThreshold: 2.0 })  // less sensitive det
 
 **Use when:** The right default for most music — percussion, mixed sources.<br>
 **Not for:** Voice/speech — use [`psola`](#psola). Extreme stretch — use [`paulstretch`](#paulstretch).
+
+
+### `hybrid` — `@audio/stretch-hybrid`
+
+Harmonic/percussive hybrid (Driedger & Müller). Median-filter HPSS splits the spectrogram into two layers; the harmonic layer goes through the phase-locked vocoder, the percussive layer through short-frame OLA — chords stay coherent and attacks stay sharp, where one algorithm must trade one for the other.
+
+```js
+import hybrid from '@audio/stretch-hybrid'
+
+hybrid(data, { factor: 2 })
+```
+
+| Param | Default | |
+|---|---|---|
+| `factor` | `1` | Time stretch ratio |
+| `frameSize` | `2048` | FFT size for HPSS + harmonic path |
+| `percFrame` | `512` | OLA frame for the percussive layer |
+| `harmMedian` | `17` | Median filter across time (frames) |
+| `percMedian` | `17` | Median filter across frequency (bins) |
+
+**Use when:** full mixes — drums over tonal material.<br>
+**Cost:** separation + two stretches ≈ 4–6× the CPU of [`pvoc-lock`](#pvoc-lock) alone.
 
 
 ### `paulstretch` — `@audio/stretch-paulstretch`

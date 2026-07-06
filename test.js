@@ -1,5 +1,5 @@
 import test, { almost, ok, is } from 'tst'
-import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from './index.js'
+import { wsola, pvoc, pvocLock, pghi, transient, hybrid, paulstretch, psola, sms } from './index.js'
 import { lsd, chordBalance, chordRetention, modulationDepth } from '@audio/stretch-core/quality'
 
 // Plain OLA via wsola with delta:0 (correlation search disabled)
@@ -82,6 +82,12 @@ testStretch('pvocLock', pvocLock, { rmsTol: 0.15 })
 
 // --- Transient-aware vocoder ---
 testStretch('transient', transient, { rmsTol: 0.15 })
+
+// --- PGHI vocoder ---
+testStretch('pghi', pghi, { rmsTol: 0.15 })
+
+// --- HPSS hybrid ---
+testStretch('hybrid', hybrid, { rmsTol: 0.2 })
 
 // --- PaulStretch ---
 test('paulstretch — extreme stretch (8x)', () => {
@@ -214,6 +220,8 @@ testStream('transient', transient)
 testStream('paulstretch', paulstretch, { factor: 8, lenTol: 0.25, energyTol: 2 })
 testStream('psola', psola, { lenTol: 0.25, energyTol: 0.5 })
 testStream('sms', sms)
+testStream('pghi', pghi)
+testStream('hybrid', hybrid, { lenTol: 0.25, energyTol: 0.5 })
 
 // --- Extreme ratios ---
 function testExtreme(name, fn, factor, minLen) {
@@ -402,6 +410,14 @@ let qualityCases = [
   ['wsola',     wsola,     'chord',  f => chordSig(0.5 * f),                     2.0, 0.9],
   ['wsola',     wsola,     'vowel',  f => vowelSig(150, 0.5 * f),                2.0, 0.2],
 
+  // pghi: measured 0.17 sine / 0.85 sweep / 0.94 chord @2x (gradient integration
+  // beats locking on modulated content, approximates it on steady polyphony)
+  ['pghi',      pghi,      'sine',   f => sineSig(440, 0.5 * f),                 2.0, 0.4],
+  ['pghi',      pghi,      'sweep',  f => sweepSig(200, 2000, 0.5 * f),          2.0, 1.1],
+  ['pghi',      pghi,      'chord',  f => chordSig(0.5 * f),                     2.0, 1.2],
+
+  ['hybrid',    hybrid,    'chord',  f => chordSig(0.5 * f),                     2.0, 1.0],
+
   ['psola',     psola,     'sine',   f => sineSig(440, 0.5 * f),                 1.5, 0.4],
   ['psola',     psola,     'vowel',  f => vowelSig(150, 0.5 * f),                1.5, 1.0],
 ]
@@ -524,7 +540,7 @@ test('pvoc — onset from t=0 is not swallowed', () => {
 })
 
 // --- Streaming with fractional analysis hop (regression: NaN output at 1.5×) ---
-for (let [name, fn] of [['pvoc', pvoc], ['pvocLock', pvocLock], ['transient', transient], ['paulstretch', paulstretch], ['sms', sms]]) {
+for (let [name, fn] of [['pvoc', pvoc], ['pvocLock', pvocLock], ['pghi', pghi], ['transient', transient], ['hybrid', hybrid], ['paulstretch', paulstretch], ['sms', sms]]) {
   test(`${name} stream — finite output at fractional hop (1.5×)`, () => {
     let data = sine(440, 32768, fs)
     let write = fn({ factor: 1.5 })

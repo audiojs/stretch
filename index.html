@@ -35,14 +35,6 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
 .source-btn.active{border-color:var(--fg);background:var(--fg);color:var(--paper)}
 .source-btn:disabled{opacity:.3;cursor:default}
 
-.tool-bar{display:flex;align-items:center;gap:10px;margin:-8px 0 18px;flex-wrap:wrap}
-.tool-bar label{font:600 10px/1 var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:0.18em}
-.wave-btn{
-  font:400 11px/1 var(--sans);padding:6px 12px;border:1px solid var(--line);border-radius:999px;
-  background:transparent;color:var(--muted);cursor:pointer;transition:all .12s ease;
-}
-.wave-btn.active{border-color:var(--fg);color:var(--fg);background:color-mix(in oklch,var(--paper) 92%,var(--fg) 8%)}
-
 .benchbar{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 18px;
 }
@@ -183,20 +175,24 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
 <div class="footer">
   Processed in-browser with Web Audio API.
   Each cell = <code>fn(samples, {factor})</code>, timed with <code>performance.now()</code>.
+  Synthetic sources also show <b>log-spectral distance</b> against ground truth regenerated
+  at the stretched duration — &lt;1&thinsp;dB transparent, &gt;3&thinsp;dB audible.
   <br>Source: <a href="https://github.com/audiojs/audio-lena">audio-lena</a> (voice),
-  synthesized (tone, chord, percussion).
+  synthesized (tone, chord, percussion, sweep).
 </div>
 
 <script type="importmap">
 {
   "imports": {
-    "fourier-transform": "https://esm.sh/fourier-transform@2.3.0",
-    "fourier-transform/stft": "https://esm.sh/fourier-transform@2.3.0/stft.js",
+    "fourier-transform": "https://esm.sh/fourier-transform@2",
+    "fourier-transform/stft": "https://esm.sh/fourier-transform@2/stft.js",
     "@audio/stretch-core": "./packages/stretch-core/index.js",
     "@audio/stretch-core/quality": "./packages/stretch-core/quality.js",
     "@audio/stretch-wsola": "./packages/stretch-wsola/wsola.js",
     "@audio/stretch-pvoc": "./packages/stretch-pvoc/pvoc.js",
     "@audio/stretch-pvoc-lock": "./packages/stretch-pvoc-lock/pvoc-lock.js",
+    "@audio/stretch-pghi": "./packages/stretch-pghi/pghi.js",
+    "@audio/stretch-hybrid": "./packages/stretch-hybrid/hybrid.js",
     "@audio/stretch-transient": "./packages/stretch-transient/transient.js",
     "@audio/stretch-paulstretch": "./packages/stretch-paulstretch/paulstretch.js",
     "@audio/stretch-psola": "./packages/stretch-psola/psola.js",
@@ -206,19 +202,23 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
 }
 </script>
 <script type="module">
-import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from '@audio/stretch'
+import { wsola, pvoc, pvocLock, pghi, transient, hybrid, paulstretch, psola, sms } from '@audio/stretch'
+import { lsd } from '@audio/stretch-core/quality'
 
 const SR = 44100
 const PI2 = Math.PI * 2
 const FACTORS = [0.5, 1.5, 2]
-let waveMode = 'raw'
 const ALGOS = [
-  { name: 'wsola',       fn: wsola,       tag: 'WSOLA' },
+  { name: 'wsola',       fn: wsola,       tag: 'time' },
+  { name: 'psola',       fn: psola,       tag: 'pitch-sync', needsSR: true },
   { name: 'pvoc',        fn: pvoc,        tag: 'spectral' },
   { name: 'pvocLock',    fn: pvocLock,    tag: 'spectral' },
+  { name: 'pghi',        fn: pghi,        tag: 'spectral' },
   { name: 'transient',   fn: transient,   tag: 'spectral' },
-  { name: 'paulstretch', fn: paulstretch, tag: 'spectral', stretchOnly: true },
-  { name: 'psola',       fn: psola,       tag: 'pitch-sync', needsSR: true },
+  { name: 'hybrid',      fn: hybrid,      tag: 'hpss' },
+  // paulstretch compared at its design point — grid columns read 4x/8x for this row
+  { name: 'paulstretch', fn: paulstretch, tag: 'extreme', stretchOnly: true,
+    labels: [null, '4×', '8×'], opts: fi => ({ factor: [null, 4, 8][fi] }) },
   { name: 'sms',         fn: sms,         tag: 'sinusoidal' },
 ]
 
@@ -241,19 +241,21 @@ function genChord(dur = 2) {
   return d
 }
 
+// Seeded + duration-parametric: genPerc(dur*factor) IS the stretched ground truth
+// (hit positions scale with duration, hit waveforms stay identical), so LSD can
+// score percussive cells too.
 function genPerc(dur = 2) {
   let n = Math.round(dur * SR), d = new Float32Array(n)
-  // 4 hits in duration
   let hits = 4, spacing = Math.floor(n / hits)
+  let seed = 0x5f3759df
+  let rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296) * 2 - 1
   for (let h = 0; h < hits; h++) {
     let off = h * spacing
-    // sharp attack, exponential decay with pitched body
     let freq = 80 + h * 20
     let len = Math.min(Math.floor(SR * 0.3), n - off)
     for (let i = 0; i < len; i++) {
       let env = Math.exp(-i / (SR * 0.04))
-      // noise burst + pitched body
-      let noise = (Math.random() * 2 - 1) * Math.exp(-i / (SR * 0.005))
+      let noise = rand() * Math.exp(-i / (SR * 0.005))
       let body = Math.sin(PI2 * freq * i / SR) * env
       d[off + i] += (noise * 0.4 + body * 0.6) * 0.7
     }
@@ -270,7 +272,7 @@ function genSweep(dur = 2) {
     let f = f0 * Math.pow(f1 / f0, t / dur)
     // Phase = integral of f(t) dt = f0 * dur * ((f1/f0)^(t/dur) - 1) / ln(f1/f0)
     let phase = f0 * dur * (Math.pow(f1 / f0, t / dur) - 1) / Math.log(f1 / f0)
-    d[i] = 0.7 * Math.sin(PI2 * phase / dur)
+    d[i] = 0.7 * Math.sin(PI2 * phase)
   }
   // gentle fade
   let fade = Math.min(500, n >> 2)
@@ -317,14 +319,21 @@ function play(samples, btn) {
 }
 
 // ── process + measure ─────────────────────
-function process(algo, samples, factor, fi) {
+// Analytic sources regenerate their ground truth at the stretched duration,
+// so each cell gets an objective LSD score next to its timing.
+const GENERATORS = { tone: genTone, chord: genChord, perc: genPerc, sweep: genSweep }
+
+function process(algo, samples, factor, fi, srcKey) {
   let opts = algo.opts ? algo.opts(fi) : { factor, ...(algo.needsSR ? { sampleRate: SR } : {}) }
+  let f = opts.factor ?? factor
   let t0 = performance.now()
   let out = algo.fn(samples, opts)
   let ms = performance.now() - t0
   let durMs = samples.length / SR * 1000
   let xrt = durMs / Math.max(ms, 1e-6)
-  return { out, ms, xrt }
+  let gen = GENERATORS[srcKey]
+  let quality = gen ? lsd(out, gen(samples.length / SR * f)) : null
+  return { out, ms, xrt, quality }
 }
 
 // Draw centered per-pixel min/max waveform for predictable rendering across sources.
@@ -341,7 +350,6 @@ function drawWave(canvas, samples, color) {
   for (let i = 0; i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]))
   let scale = (h * 0.42) / peak
   let step = samples.length / Math.max(1, w)
-  let raw = waveMode === 'raw'
 
   ctx.strokeStyle = color || getComputedStyle(canvas).getPropertyValue('--wave-color')?.trim() || '#9a9488'
   ctx.lineWidth = 1
@@ -349,18 +357,14 @@ function drawWave(canvas, samples, color) {
   for (let x = 0; x < w; x++) {
     let i0 = Math.floor(x * step)
     let i1 = Math.max(i0 + 1, Math.floor((x + 1) * step))
-    let min = 1, max = -1, absMax = 0
+    let min = 1, max = -1
     for (let i = i0; i < i1 && i < samples.length; i++) {
       let s = samples[i]
       if (s < min) min = s
       if (s > max) max = s
-      let a = Math.abs(s)
-      if (a > absMax) absMax = a
     }
-    let lo = raw ? min : -absMax
-    let hi = raw ? max : absMax
-    ctx.moveTo(x + 0.5, mid + lo * scale)
-    ctx.lineTo(x + 0.5, mid + hi * scale)
+    ctx.moveTo(x + 0.5, mid + min * scale)
+    ctx.lineTo(x + 0.5, mid + max * scale)
   }
   ctx.stroke()
 
@@ -432,7 +436,13 @@ function updateBench(samples, runs = []) {
   ].join('')
 }
 
-function cellContent(samples, ms, xrt, label) {
+function lsdClass(db) {
+  if (db < 1) return 'fast'   // transparent
+  if (db > 3) return 'slow'   // audible colouration
+  return ''
+}
+
+function cellContent(samples, ms, xrt, label, quality) {
   let div = document.createElement('div')
   div.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%'
   let btn = document.createElement('button')
@@ -450,6 +460,14 @@ function cellContent(samples, ms, xrt, label) {
   met.innerHTML = label ? `<b>${label}</b> · ${summary}` : `<b>${summary}</b>`
   div.appendChild(btn)
   div.appendChild(cv)
+  if (quality != null) {
+    let q = document.createElement('span')
+    let qcls = lsdClass(quality)
+    q.className = qcls ? `metric ${qcls}` : 'metric'
+    q.title = 'log-spectral distance vs regenerated ground truth — <1 dB transparent, >3 dB audible'
+    q.innerHTML = `<b>${quality.toFixed(1)} dB</b>`
+    div.appendChild(q)
+  }
   div.appendChild(met)
   // draw after layout
   requestAnimationFrame(() => drawWave(cv, samples))
@@ -479,7 +497,9 @@ function origContent(samples) {
 }
 
 // ── run all ───────────────────────────────
+let runToken = 0
 async function runSource(srcKey) {
+  let token = ++runToken
   status.textContent = srcKey === 'voice' ? 'Loading audio…' : 'Generating…'
   status.className = 'busy'
   buildGrid()
@@ -491,6 +511,7 @@ async function runSource(srcKey) {
   }
 
   await new Promise(r => setTimeout(r, 30))
+  if (token !== runToken) return
 
   let samples
   if (srcKey === 'tone') samples = genTone()
@@ -498,6 +519,7 @@ async function runSource(srcKey) {
   else if (srcKey === 'perc') samples = genPerc()
   else if (srcKey === 'sweep') samples = genSweep()
   else samples = await loadLena()
+  if (token !== runToken) return
   let runs = []
   updateBench(samples, runs)
 
@@ -517,11 +539,12 @@ async function runSource(srcKey) {
 
       status.textContent = `${a.name} ${a.labels?.[fi] ?? f+'×'}…`
       await new Promise(r => setTimeout(r, 5))
+      if (token !== runToken) return
 
       try {
-        let { out, ms, xrt } = process(a, samples, f, fi)
+        let { out, ms, xrt, quality } = process(a, samples, f, fi, srcKey)
         cell.innerHTML = ''
-        cell.appendChild(cellContent(out, ms, xrt, a.labels?.[fi]))
+        cell.appendChild(cellContent(out, ms, xrt, a.labels?.[fi], quality))
         runs.push({ name: a.name, label: a.labels?.[fi] ?? `${f}×`, ms, xrt })
         total += ms; count++
         updateBench(samples, runs)
@@ -546,13 +569,12 @@ document.querySelectorAll('.source-btn').forEach(btn => {
   }
 })
 
-document.querySelectorAll('.wave-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    waveMode = btn.dataset.wave
-    redrawWaves()
-  }
+// canvases carry their samples — redraw at the new size instead of letting CSS
+// scale a stale bitmap
+let resizeRaf = 0
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(resizeRaf)
+  resizeRaf = requestAnimationFrame(redrawWaves)
 })
 
 buildGrid()

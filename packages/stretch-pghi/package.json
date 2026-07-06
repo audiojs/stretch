@@ -1,0 +1,48 @@
+{
+  "name": "@audio/stretch-pghi",
+  "version": "1.0.0",
+  "description": "Phase Gradient Heap Integration vocoder (Průša & Holighaus \"Phase Vocoder Done Right\") — no peak picking, no transient heuristics",
+  "type": "module",
+  "sideEffects": false,
+  "main": "pghi.js",
+  "types": "pghi.d.ts",
+  "exports": {
+    ".": "./pghi.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "pghi.js",
+    "pghi.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@audio/stretch-core": "^1.0.0",
+    "fourier-transform": "^2.3.0"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "time-stretch",
+    "phase-vocoder",
+    "pghi",
+    "rtpghi",
+    "phase-gradient",
+    "stft"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Dmitry Iv. <dfcreative@gmail.com>",
+  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-pghi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "directory": "packages/stretch-pghi"
+  },
+  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "engines": {
+    "node": ">=18"
+  }
+}

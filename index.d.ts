@@ -7,8 +7,14 @@ export type { PvocOpts } from '@audio/stretch-pvoc'
 export { default as pvocLock } from '@audio/stretch-pvoc-lock'
 export type { PvocLockOpts } from '@audio/stretch-pvoc-lock'
 
+export { default as pghi } from '@audio/stretch-pghi'
+export type { PghiOpts } from '@audio/stretch-pghi'
+
 export { default as transient } from '@audio/stretch-transient'
 export type { TransientOpts } from '@audio/stretch-transient'
+
+export { default as hybrid } from '@audio/stretch-hybrid'
+export type { HybridOpts } from '@audio/stretch-hybrid'
 
 export { default as paulstretch } from '@audio/stretch-paulstretch'
 export type { PaulstretchOpts } from '@audio/stretch-paulstretch'
