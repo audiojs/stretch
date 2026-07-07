@@ -28,7 +28,7 @@ import { lsd, spectralSim, chordBalance, chordRetention, modulationDepth } from 
 | `chordRetention(out, ref, freqs, fs)` | partial-energy ratio out/ref |
 | `modulationDepth(out, freqs, fs)` | AM depth at each partial — catches "crumble" |
 
-Used by `time-stretch`'s test suite and research scripts to compare algorithms.
+Used by `@audio/stretch`'s test suite and research scripts to compare algorithms.
 
 Part of [`@audio/stretch`](../..).
 
