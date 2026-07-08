@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shared helpers and quality metrics for @audio/stretch-* sub-packages",
   "type": "module",
   "sideEffects": false,
