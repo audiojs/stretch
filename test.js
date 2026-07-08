@@ -556,3 +556,15 @@ for (let [name, fn] of [['pvoc', pvoc], ['pvocLock', pvocLock], ['pghi', pghi], 
     ok(Math.sqrt(energy / Math.max(1, total)) > 0.3, 'carries signal energy')
   })
 }
+
+test('pvocLock streaming: non-integer anaHop ratios stay finite', () => {
+  // regression: hopSize/factor was passed unrounded — the STFT ring indexed at a
+  // fractional hop and emitted NaN for any non-integer ratio (all semitone ratios)
+  let x = sine(440, fs, fs)
+  for (let factor of [1.5, 1.25, 1.7, 2.5, 0.75, 2 ** (7 / 12)]) {
+    let write = pvocLock({ factor, frameSize: 1024 })
+    let out = write(x.slice())
+    ok(out.length > 0, `factor ${factor.toFixed(3)} emits`)
+    ok([...out].every(v => isFinite(v)), `factor ${factor.toFixed(3)} finite`)
+  }
+})

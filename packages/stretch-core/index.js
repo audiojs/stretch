@@ -107,12 +107,15 @@ export function makeStreamBufs(N, nf = 0) {
 }
 
 // Resolve factor → anaHop/synHop for stftBatch/stftStream from fourier-transform/stft.
+// anaHop must be an integer — the STFT stream indexes its ring at the raw hop position,
+// so a fractional hop (any non-integer hopSize/factor, e.g. semitone ratios) yields NaN.
+// The achieved factor is synHop/anaHop; callers wanting an exact ratio resample on top.
 export function stretchOpts(opts) {
   let frameSize = opts?.frameSize ?? 2048
   let hopSize = opts?.hopSize ?? (frameSize >> 2)
   let factor = opts?.factor ?? 1
   let synHop = opts?.synHop ?? hopSize
-  let anaHop = opts?.anaHop ?? hopSize / factor
+  let anaHop = Math.max(1, Math.round(opts?.anaHop ?? hopSize / factor))
   return { ...opts, frameSize, hopSize, synHop, anaHop }
 }
 
