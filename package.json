@@ -26,7 +26,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/audiojs/time-stretch.git"
+    "url": "git+https://github.com/audiojs/stretch.git"
   },
   "keywords": [
     "time-stretch",
@@ -50,9 +50,9 @@
   "author": "Dmitry Iv. <dfcreative@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/audiojs/time-stretch/issues"
+    "url": "https://github.com/audiojs/stretch/issues"
   },
-  "homepage": "https://github.com/audiojs/time-stretch#readme",
+  "homepage": "https://github.com/audiojs/stretch#readme",
   "engines": {
     "node": ">=18"
   },

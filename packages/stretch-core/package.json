@@ -35,13 +35,13 @@
   },
   "license": "MIT",
   "author": "Dmitry Iv. <dfcreative@gmail.com>",
-  "homepage": "https://github.com/audiojs/time-stretch/tree/main/packages/stretch-core",
+  "homepage": "https://github.com/audiojs/stretch/tree/main/packages/stretch-core",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/audiojs/time-stretch.git",
+    "url": "git+https://github.com/audiojs/stretch.git",
     "directory": "packages/stretch-core"
   },
-  "bugs": "https://github.com/audiojs/time-stretch/issues",
+  "bugs": "https://github.com/audiojs/stretch/issues",
   "engines": {
     "node": ">=18"
   }

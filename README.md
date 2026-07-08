@@ -1,4 +1,4 @@
-# @audio/stretch [![test](https://github.com/audiojs/time-stretch/actions/workflows/test.yml/badge.svg)](https://github.com/audiojs/time-stretch/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/@audio/stretch)](https://www.npmjs.com/package/@audio/stretch) [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/audiojs/time-stretch/blob/main/LICENSE)
+# @audio/stretch [![test](https://github.com/audiojs/stretch/actions/workflows/test.yml/badge.svg)](https://github.com/audiojs/stretch/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/@audio/stretch)](https://www.npmjs.com/package/@audio/stretch) [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/audiojs/stretch/blob/main/LICENSE)
 
 Time stretching algorithms — umbrella over `@audio/stretch-*` atoms.
 
@@ -273,8 +273,8 @@ import { lsd, spectralSim, chordBalance, chordRetention, modulationDepth } from 
 ## See also
 
 * [fourier-transform](https://github.com/audiojs/fourier-transform) — FFT + STFT kernels
-* [@audio/shift-*](https://github.com/audiojs/pitch-shift) — pitch shifting family
-* [@audio/filter](https://github.com/audiojs/audio-filter) — audio filters
+* [@audio/shift-*](https://github.com/audiojs/shift) — pitch shifting family
+* [@audio/filter](https://github.com/audiojs/filter) — audio filters
 * [digital-filter](https://github.com/audiojs/digital-filter) — filter design
 
 
@@ -292,6 +292,6 @@ import { lsd, spectralSim, chordBalance, chordRetention, modulationDepth } from 
 
 <div align="center">
 
-[MIT](https://github.com/audiojs/time-stretch/blob/main/LICENSE) [ॐ](https://github.com/krishnized/license)
+[MIT](https://github.com/audiojs/stretch/blob/main/LICENSE) [ॐ](https://github.com/krishnized/license)
 
 </div>
