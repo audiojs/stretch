@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pvoc-lock",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Phase-locked vocoder (Laroche & Dolson 1999) — eliminates phasiness of plain pvoc",
   "type": "module",
   "sideEffects": false,
@@ -14,11 +14,12 @@
     "pvoc-lock.js",
     "pvoc-lock.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "util.js"
   ],
   "dependencies": {
-    "@audio/stretch-core": "^1.0.0",
-    "fourier-transform": "^2.3.0"
+    "fourier-transform": "^2.3.0",
+    "@audio/spectral-pvoc": "^1.0.0"
   },
   "keywords": [
     "audio",

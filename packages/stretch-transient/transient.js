@@ -4,7 +4,8 @@
 // Implies phase locking.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
-import { writer, wrapPhase, lockPhase, stretchOpts } from '@audio/stretch-core'
+import { writer, wrapPhase, stretchOpts } from './util.js'
+import { lockPhase } from '@audio/spectral-pvoc'
 
 function updateFluxStats(state, value, alpha) {
   if (state.fluxMean == null) { state.fluxMean = value; state.fluxVar = 0; return }

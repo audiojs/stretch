@@ -17,7 +17,7 @@
 //   Phase Gradient Heap Integration" (RTPGHI). DAFx-16.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
-import { writer, wrapPhase, stretchOpts, PI2 } from '@audio/stretch-core'
+import { writer, wrapPhase, stretchOpts, PI2 } from './util.js'
 
 // Binary max-heap over (key, item) pairs stored in state-owned arrays.
 function heapPush(keys, items, size, key, item) {

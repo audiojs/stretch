@@ -1,4 +1,4 @@
-import { hannWindow, writer, makeStreamBufs } from '@audio/stretch-core'
+import { hannWindow, writer, makeStreamBufs } from './util.js'
 
 // Canonical Verhelst-Roelands WSOLA: each grain's read position maximizes cross-
 // correlation with the *natural progression* of the previous grain through the

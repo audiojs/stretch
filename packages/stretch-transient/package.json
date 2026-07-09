@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-transient",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Transient-aware phase-locked vocoder (Röbel 2003) — preserves attacks on drums and plucks",
   "type": "module",
   "sideEffects": false,
@@ -14,11 +14,12 @@
     "transient.js",
     "transient.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "util.js"
   ],
   "dependencies": {
-    "@audio/stretch-core": "^1.0.0",
-    "fourier-transform": "^2.3.0"
+    "fourier-transform": "^2.3.0",
+    "@audio/spectral-pvoc": "^1.0.0"
   },
   "keywords": [
     "audio",

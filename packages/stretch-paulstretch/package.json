@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-paulstretch",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Paulstretch — Paul Nasca's extreme stretch (8×+) for ambient/drone material",
   "type": "module",
   "sideEffects": false,
@@ -14,10 +14,10 @@
     "paulstretch.js",
     "paulstretch.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "util.js"
   ],
   "dependencies": {
-    "@audio/stretch-core": "^1.0.0",
     "fourier-transform": "^2.3.0"
   },
   "keywords": [

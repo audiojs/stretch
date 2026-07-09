@@ -6,7 +6,7 @@
 // For transient preservation use @audio/stretch-transient.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
-import { writer, wrapPhase, stretchOpts } from '@audio/stretch-core'
+import { writer, wrapPhase, stretchOpts } from './util.js'
 
 function process(mag, phase, state, ctx) {
   let { half, anaHop, synHop, freqPerBin, frameStart } = ctx

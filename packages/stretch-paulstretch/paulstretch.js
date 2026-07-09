@@ -3,7 +3,7 @@
 // ambient drone. Designed for factors ≥ 8×.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
-import { writer } from '@audio/stretch-core'
+import { writer } from './util.js'
 
 function createRandom(seed) {
   let value = (seed >>> 0) || 1

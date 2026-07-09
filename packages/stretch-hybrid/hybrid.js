@@ -14,7 +14,7 @@
 import { stft, istft } from 'fourier-transform/stft'
 import wsola from '@audio/stretch-wsola'
 import pvocLock from '@audio/stretch-pvoc-lock'
-import { writer } from '@audio/stretch-core'
+import { writer } from './util.js'
 
 // Median of scratch[0..n) via insertion sort — windows are ~17 wide.
 let _med = new Float64Array(0)

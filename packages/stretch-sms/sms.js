@@ -9,7 +9,7 @@
 //   a sinusoidal representation." IEEE Trans. ASSP, 34(4).
 
 import { fft, ifft } from 'fourier-transform'
-import { hannWindow, clamp, normalize, writer, makeStreamBufs, PI2 } from '@audio/stretch-core'
+import { hannWindow, clamp, normalize, writer, makeStreamBufs, PI2 } from './util.js'
 
 function createNoiseState(seed = 0x12345678) {
   return { seed: seed >>> 0 }

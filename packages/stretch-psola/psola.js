@@ -5,7 +5,7 @@
  */
 
 import wsola from '@audio/stretch-wsola'
-import { clamp, normalize, writer, PI2 } from '@audio/stretch-core'
+import { clamp, normalize, writer, PI2 } from './util.js'
 
 let _corr = new Float64Array(0)
 function detectPeriodRange(data, pos, minLag, maxLag, prevPeriod) {

@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pvoc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Phase vocoder time stretching — educational baseline without phase locking",
   "type": "module",
   "sideEffects": false,
@@ -14,10 +14,10 @@
     "pvoc.js",
     "pvoc.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "util.js"
   ],
   "dependencies": {
-    "@audio/stretch-core": "^1.0.0",
     "fourier-transform": "^2.3.0"
   },
   "keywords": [

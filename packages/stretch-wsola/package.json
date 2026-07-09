@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-wsola",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "WSOLA time stretching — time-domain, low CPU, great for speech",
   "type": "module",
   "sideEffects": false,
@@ -14,11 +14,9 @@
     "wsola.js",
     "wsola.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "util.js"
   ],
-  "dependencies": {
-    "@audio/stretch-core": "^1.0.0"
-  },
   "keywords": [
     "audio",
     "dsp",

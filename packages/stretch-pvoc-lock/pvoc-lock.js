@@ -5,7 +5,8 @@
 // For attack preservation on percussion, use @audio/stretch-transient.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
-import { writer, wrapPhase, lockPhase, stretchOpts } from '@audio/stretch-core'
+import { writer, wrapPhase, stretchOpts } from './util.js'
+import { lockPhase } from '@audio/spectral-pvoc'
 
 function process(mag, phase, state, ctx) {
   let { half, anaHop, synHop, freqPerBin } = ctx

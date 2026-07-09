@@ -1,6 +1,6 @@
 import test, { almost, ok, is } from 'tst'
 import { wsola, pvoc, pvocLock, pghi, transient, hybrid, paulstretch, psola, sms } from './index.js'
-import { lsd, chordBalance, chordRetention, modulationDepth } from '@audio/stretch-core/quality'
+import { lsd, chordBalance, chordRetention, modulationDepth } from '@audio/quality'
 
 // Plain OLA via wsola with delta:0 (correlation search disabled)
 const ola = (d, o) => d instanceof Float32Array
@@ -427,7 +427,7 @@ for (let [name, fn, sigName, gen, factor, maxLSD] of qualityCases) {
     let src = gen(1)
     let truth = gen(factor)
     let out = fn(src, { factor })
-    let score = lsd(out, truth)
+    let score = lsd(out, truth, { trim: 0.1 })
     ok(score < maxLSD, `LSD=${score.toFixed(2)} dB (limit ${maxLSD})`)
   })
 }
@@ -438,19 +438,19 @@ test('psola — chord falls through to wsola (LSD < 0.9 dB)', () => {
   let src = chordSig(0.5)
   let truth = chordSig(1.0)
   let out = psola(src, { factor: 2 })
-  let score = lsd(out, truth)
+  let score = lsd(out, truth, { trim: 0.1 })
   ok(score < 0.9, `LSD=${score.toFixed(2)} dB (limit 0.9)`)
 })
 
 test('lsd — identity returns 0', () => {
   let a = chordSig(0.5)
-  almost(lsd(a, a), 0, 0.001)
+  almost(lsd(a, a, { trim: 0.1 }), 0, 0.001)
 })
 
 test('lsd — non-matching signals return large value', () => {
   let a = sineSig(440, 0.5)
   let b = sineSig(880, 0.5)
-  ok(lsd(a, b) > 5, 'different pitches = high LSD')
+  ok(lsd(a, b, { trim: 0.1 }) > 5, 'different pitches = high LSD')
 })
 
 // --- Chord partial balance & retention (Goertzel-based) ---
