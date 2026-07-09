@@ -186,8 +186,8 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
   "imports": {
     "fourier-transform": "https://esm.sh/fourier-transform@2",
     "fourier-transform/stft": "https://esm.sh/fourier-transform@2/stft.js",
-    "@audio/stretch-core": "./packages/stretch-core/index.js",
-    "@audio/stretch-core/quality": "./packages/stretch-core/quality.js",
+    "@audio/quality": "https://esm.sh/@audio/quality@1",
+    "@audio/spectral-pvoc": "https://esm.sh/@audio/spectral-pvoc@1",
     "@audio/stretch-wsola": "./packages/stretch-wsola/wsola.js",
     "@audio/stretch-pvoc": "./packages/stretch-pvoc/pvoc.js",
     "@audio/stretch-pvoc-lock": "./packages/stretch-pvoc-lock/pvoc-lock.js",
@@ -203,7 +203,7 @@ h1{font:500 clamp(20px,2.5vw,26px)/1 var(--sans);letter-spacing:0.16em;text-tran
 </script>
 <script type="module">
 import { wsola, pvoc, pvocLock, pghi, transient, hybrid, paulstretch, psola, sms } from '@audio/stretch'
-import { lsd } from '@audio/stretch-core/quality'
+import { lsd } from '@audio/quality'
 
 const SR = 44100
 const PI2 = Math.PI * 2

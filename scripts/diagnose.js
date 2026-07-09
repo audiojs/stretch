@@ -3,7 +3,9 @@
  * Usage: node diagnose.js
  */
 import { wsola, psola, pvocLock } from '../index.js'
-import { hannWindow } from '@audio/stretch-core'
+
+// Hann window (inlined — stretch-core dissolved)
+const hannWindow = N => Float64Array.from({ length: N }, (_, i) => 0.5 * (1 - Math.cos(2 * Math.PI * i / N)))
 
 // Plain OLA via wsola with delta:0 (correlation search disabled)
 const ola = (d, o) => wsola(d, { ...o, delta: 0 })

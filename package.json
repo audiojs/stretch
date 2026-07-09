@@ -68,6 +68,7 @@
     "@audio/stretch-wsola": "^1.0.0"
   },
   "devDependencies": {
+    "@audio/quality": "^1.0.0",
     "audio-lena": "^3.0.0",
     "playwright": "^1.59.1",
     "tst": "^9.4.0",

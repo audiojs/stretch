@@ -1,6 +1,6 @@
 // Measure quality + perf on chord/voice/sine. Run before/after a change to compare.
 import { wsola, pvocLock } from '../index.js'
-import { lsd, chordRetention, chordBalance, modulationDepth } from '@audio/stretch-core/quality'
+import { lsd, chordRetention, chordBalance, modulationDepth } from '@audio/quality'
 
 let fs = 44100
 

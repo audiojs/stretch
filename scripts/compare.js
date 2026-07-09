@@ -5,7 +5,7 @@
  * Usage: node compare.js
  */
 import { wsola, pvoc, pvocLock, transient, paulstretch, psola, sms } from '../index.js'
-import { lsd } from '@audio/stretch-core/quality'
+import { lsd } from '@audio/quality'
 
 const ola = (d, o) => wsola(d, { ...(o || {}), frameSize: (o && o.frameSize) || 2048, delta: 0 })
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
