@@ -1,7 +1,7 @@
 {
   "name": "@audio/stretch-core",
-  "version": "1.0.1",
-  "description": "Shared helpers and quality metrics for @audio/stretch-* sub-packages",
+  "version": "1.0.2",
+  "description": "Internal glue for @audio/stretch-* atoms — framing, overlap-add, and quality-metric helpers",
   "type": "module",
   "sideEffects": false,
   "main": "index.js",
