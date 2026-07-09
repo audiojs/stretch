@@ -247,13 +247,12 @@ sms(data, { factor: 3, frameSize: 4096 })
 **Not for:** Noise-dominated material.
 
 
-## Shared — `@audio/stretch-core`
+## Quality metrics — `@audio/quality`
 
-Helpers and quality metrics shared across atoms:
+Every atom is self-contained (framing/OLA helpers inlined; the phase-locking engine lives in [`@audio/spectral-pvoc`](https://github.com/audiojs/spectral)). Output quality is evaluated with [`@audio/quality`](https://github.com/audiojs/measure):
 
 ```js
-import { hannWindow, wrapPhase, resample, writer, makeStreamBufs } from '@audio/stretch-core'
-import { lsd, spectralSim, chordBalance, chordRetention, modulationDepth } from '@audio/stretch-core/quality'
+import { lsd, spectralSim, chordBalance, chordRetention, modulationDepth } from '@audio/quality'
 ```
 
 `lsd` (log-spectral distance), `spectralSim` (cosine similarity), `chordBalance`, `chordRetention`, and `modulationDepth` (AM depth per partial) evaluate algorithm output against a reference.
