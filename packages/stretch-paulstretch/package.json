@@ -8,7 +8,10 @@
   "types": "paulstretch.d.ts",
   "exports": {
     ".": "./paulstretch.js",
-    "./audio": "./audio.js",
+    "./audio": {
+      "types": "./audio.d.ts",
+      "default": "./audio.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -17,7 +20,8 @@
     "README.md",
     "LICENSE",
     "util.js",
-    "audio.js"
+    "audio.js",
+    "audio.d.ts"
   ],
   "dependencies": {
     "fourier-transform": "^2.3.0"
