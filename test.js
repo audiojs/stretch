@@ -596,3 +596,22 @@ test('manifests — every package hosts as a variable-length whole atom', async 
     ok(Math.abs(hz - 440) < 10, `${pkg}: pitch preserved (${hz.toFixed(0)}Hz)`)
   }
 })
+
+test('pvoc-lock — sliding factor fn: length integrates, pitch preserved throughout', () => {
+	let sr = 44100, n = sr * 2, d = new Float32Array(n)
+	for (let i = 0; i < n; i++) d[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sr)
+	let f = t => 1 + Math.min(1, Math.max(0, t / 2))  // 1 → 2 over the 2s source
+	let out = pvocLock(d, { factor: f, fs: sr, sampleRate: sr })
+	almost(out.length / n, 1.5, 0.02, `∫factor over source (got ${(out.length / n).toFixed(3)})`)
+	ok([...out].every(isFinite), 'finite')
+	let zc = (a, lo, hi) => { let c = 0; for (let i = lo + 1; i < hi; i++) if ((a[i - 1] < 0) !== (a[i] < 0)) c++; return c / 2 / ((hi - lo) / sr) }
+	almost(zc(out, sr >> 2, sr >> 1), 440, 6, 'pitch early')
+	almost(zc(out, out.length - sr, out.length - (sr >> 2)), 440, 6, 'pitch late (2× region)')
+
+	// streaming form matches
+	let w = pvocLock({ factor: f, fs: sr, sampleRate: sr })
+	let total = 0
+	for (let off = 0; off < n; off += 4096) total += w(d.subarray(off, Math.min(off + 4096, n))).length
+	total += w().length
+	almost(total / n, 1.5, 0.02, 'stream length integrates')
+})
