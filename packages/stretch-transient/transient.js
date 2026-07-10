@@ -69,6 +69,9 @@ function makeProcess(threshold) {
 }
 
 export default function transient(data, opts) {
+  // channel arrays + Float64Array accepted — parity with @audio/shift (audit: [L,R] was silently read as opts)
+  if (Array.isArray(data) && (data[0] instanceof Float32Array || data[0] instanceof Float64Array)) return data.map(ch => transient(ch, opts))
+  if (data instanceof Float64Array) data = Float32Array.from(data)
   let threshold = (data instanceof Float32Array ? opts?.transientThreshold : data?.transientThreshold) ?? 1.5
   let process = makeProcess(threshold)
   if (!(data instanceof Float32Array)) return writer(stftStream(process, stretchOpts(data)))

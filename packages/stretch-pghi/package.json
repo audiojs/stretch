@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pghi",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Phase Gradient Heap Integration vocoder (Průša & Holighaus \"Phase Vocoder Done Right\") — no peak picking, no transient heuristics",
   "type": "module",
   "sideEffects": false,

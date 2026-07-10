@@ -229,6 +229,9 @@ function synthFrame(t0, t1, r0, r1, alpha, nTracks, phi, half, N, hop, noiseStat
 }
 
 export default function sms(data, opts = {}) {
+  // channel arrays + Float64Array accepted — parity with @audio/shift (audit: [L,R] was silently read as opts)
+  if (Array.isArray(data) && (data[0] instanceof Float32Array || data[0] instanceof Float64Array)) return data.map(ch => sms(ch, opts))
+  if (data instanceof Float64Array) data = Float32Array.from(data)
   if (!(data instanceof Float32Array)) return writer(smsStream(data))
 
   let factor = opts.factor ?? 1

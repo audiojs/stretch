@@ -23,6 +23,9 @@ function makeProcess(seed) {
 }
 
 export default function paulstretch(data, opts) {
+  // channel arrays + Float64Array accepted — parity with @audio/shift (audit: [L,R] was silently read as opts)
+  if (Array.isArray(data) && (data[0] instanceof Float32Array || data[0] instanceof Float64Array)) return data.map(ch => paulstretch(ch, opts))
+  if (data instanceof Float64Array) data = Float32Array.from(data)
   if (!(data instanceof Float32Array)) {
     opts = data
     let factor = opts?.factor ?? 8

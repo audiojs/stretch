@@ -48,7 +48,7 @@ import transient from '@audio/stretch-transient'
 let out = transient(samples, { factor: 2 })
 ```
 
-> Mono `Float32Array` in/out. For stereo, process channels independently. Output sizes may be variable — small or empty early chunks are normal in streaming.
+> `Float32Array` in/out; a channel array `[L, R]` (or `Float64Array`) is accepted and processed per channel — parity with `@audio/shift`. Output sizes may be variable — small or empty early chunks are normal in streaming.
 
 ## Time domain
 

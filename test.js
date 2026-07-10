@@ -615,3 +615,17 @@ test('pvoc-lock — sliding factor fn: length integrates, pitch preserved throug
 	total += w().length
 	almost(total / n, 1.5, 0.02, 'stream length integrates')
 })
+
+// --- audit 2026-07-10: channel-array + Float64 input parity with @audio/shift ---
+
+test('batch entries accept [L, R] channel arrays and Float64Array', () => {
+	let L = new Float32Array(8000), R = new Float32Array(8000)
+	for (let i = 0; i < 8000; i++) { L[i] = Math.sin(2 * Math.PI * 220 * i / 8000); R[i] = Math.sin(2 * Math.PI * 330 * i / 8000) }
+	for (const fn of [wsola, pvoc]) {
+		let out = fn([L, R], { factor: 2, sampleRate: 8000 })
+		ok(Array.isArray(out) && out.length === 2, fn.name + ': channel array in → channel array out')
+		ok(Math.abs(out[0].length - 2 * L.length) < 4096, fn.name + ': each channel stretched (' + out[0].length + ')')
+		let d64 = fn(Float64Array.from(L), { factor: 2, sampleRate: 8000 })
+		ok(d64 instanceof Float32Array && Math.abs(d64.length - 2 * L.length) < 4096, fn.name + ': Float64Array accepted')
+	}
+})
