@@ -568,3 +568,31 @@ test('pvocLock streaming: non-integer anaHop ratios stay finite', () => {
     ok([...out].every(v => isFinite(v)), `factor ${factor.toFixed(3)} finite`)
   }
 })
+
+// =============================================================================
+// audio.js manifests — whole-render atoms with a structural `frames` hook
+
+test('manifests — every package hosts as a variable-length whole atom', async () => {
+  let sr = 44100, N = 16384, d = new Float32Array(N)
+  for (let i = 0; i < N; i++) d[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sr)
+  for (let pkg of ['pvoc-lock', 'pvoc', 'pghi', 'wsola', 'psola', 'sms', 'transient', 'hybrid', 'paulstretch']) {
+    let mod = await import(`./packages/stretch-${pkg}/audio.js`)
+    let m = Object.values(mod)[0]
+    ok(typeof m === 'function' && m.streaming === false && typeof m.frames === 'function', `${pkg}: whole-render manifest shape`)
+    let params = {}
+    for (let [k, sp] of Object.entries(m.params)) params[k] = new Float32Array([sp.default])
+    params.factor = new Float32Array([2])
+    let outLen = m.frames(N, { sampleRate: sr, params })
+    is(outLen, N * 2, `${pkg}: frames hook = input × factor`)
+    let process = m({ sampleRate: sr })
+    let out = [new Float32Array(outLen)]
+    process([[d]], [out], params)
+    ok(out[0].some(v => Math.abs(v) > 0.05), `${pkg}: produced signal`)
+    ok([...out[0]].every(Number.isFinite), `${pkg}: finite output`)
+    // pitch preserved over the steady middle
+    let o = out[0], from = outLen >> 2, to = outLen - (outLen >> 2), zc = 0
+    for (let i = from + 1; i < to; i++) if ((o[i - 1] < 0) !== (o[i] < 0)) zc++
+    let hz = zc / 2 / ((to - from) / sr)
+    ok(Math.abs(hz - 440) < 10, `${pkg}: pitch preserved (${hz.toFixed(0)}Hz)`)
+  }
+})
