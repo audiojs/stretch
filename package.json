@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "module",
   "types": "index.d.ts",
   "description": "Time stretching — umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
@@ -76,5 +76,6 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "funding": "https://github.com/sponsors/audiojs"
 }

@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-psola",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Pitch-Synchronous Overlap-Add — time-domain stretch for speech and monophonic instruments",
   "type": "module",
   "sideEffects": false,
@@ -50,5 +50,6 @@
   "engines": {
     "node": ">=18"
   },
-  "audio": "./audio.js"
+  "audio": "./audio.js",
+  "funding": "https://github.com/sponsors/audiojs"
 }

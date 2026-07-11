@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-wsola",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "WSOLA time stretching — time-domain, low CPU, great for speech",
   "type": "module",
   "sideEffects": false,
@@ -46,5 +46,6 @@
   "engines": {
     "node": ">=18"
   },
-  "audio": "./audio.js"
+  "audio": "./audio.js",
+  "funding": "https://github.com/sponsors/audiojs"
 }

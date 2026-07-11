@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-hybrid",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Hybrid harmonic/percussive time stretch (Driedger) — HPSS split, phase-locked vocoder + OLA per layer",
   "type": "module",
   "sideEffects": false,
@@ -53,5 +53,6 @@
   "engines": {
     "node": ">=18"
   },
-  "audio": "./audio.js"
+  "audio": "./audio.js",
+  "funding": "https://github.com/sponsors/audiojs"
 }
