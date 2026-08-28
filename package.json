@@ -1,9 +1,9 @@
 {
   "name": "@audio/stretch",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "type": "module",
   "types": "index.d.ts",
-  "description": "Time stretching — umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
+  "description": "Time stretching \u2014 umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
   "sideEffects": false,
   "main": "index.js",
   "exports": {

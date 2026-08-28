@@ -1,5 +1,7 @@
 # @audio/stretch [![test](https://github.com/audiojs/stretch/actions/workflows/test.yml/badge.svg)](https://github.com/audiojs/stretch/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/@audio/stretch)](https://www.npmjs.com/package/@audio/stretch) [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/audiojs/stretch/blob/main/LICENSE)
 
+Try it in the browser: [Pitch and tempo changer](https://audiojs.dev/util/pitch-tempo/). Runs on this package, nothing is uploaded.
+
 Time stretching algorithms — umbrella over `@audio/stretch-*` atoms.
 
 | Atom | Algorithm | Domain | Quality | CPU | Best for |
