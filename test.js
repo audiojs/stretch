@@ -629,3 +629,71 @@ test('batch entries accept [L, R] channel arrays and Float64Array', () => {
 		ok(d64 instanceof Float32Array && Math.abs(d64.length - 2 * L.length) < 4096, fn.name + ': Float64Array accepted')
 	}
 })
+
+// --- stream ≡ batch: every chunking yields the batch output, sample for sample ---
+
+function streamed(fn, x, opts, sizes) {
+	let w = fn(opts), parts = []
+	for (let i = 0, k = 0; i < x.length; k++) { let n = sizes[k % sizes.length]; parts.push(w(x.subarray(i, i + n))); i += n }
+	parts.push(w())
+	let out = new Float32Array(parts.reduce((a, p) => a + p.length, 0)), o = 0
+	for (let p of parts) { out.set(p, o); o += p.length }
+	return out
+}
+
+test('stream ≡ batch under any chunking (wsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient)', () => {
+	// wsola/sms zeroed their unfinished overlap-add tails at each buffer compaction (clicks
+	// every ~16k samples) and ran their own grain schedules (±2 % length); hybrid stitched
+	// independent segment renders; paulstretch threw once the analysis hop passed the frame
+	let sr = 44100, seed = 3, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1
+	let x = Float32Array.from({ length: sr + 123 }, (_, i) => 0.4 * Math.sin(2 * Math.PI * 220 * i / sr) + 0.2 * Math.sin(2 * Math.PI * 1370 * i / sr) + 0.05 * rnd())
+	for (let [name, fn] of Object.entries({ wsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient })) {
+		for (let factor of [0.13, 0.5, 1.37, 3]) {
+			let batch = fn(Float32Array.from(x), { factor, sampleRate: sr })
+			for (let sizes of [[997], [64], [4096, 3, 1000]]) {
+				let s = streamed(fn, x, { factor, sampleRate: sr }, sizes), m = s.length === batch.length ? 0 : Infinity
+				for (let i = 0; i < batch.length && m < Infinity; i++) m = Math.max(m, Math.abs(s[i] - batch[i]))
+				is(m, 0, `${name} ×${factor}, chunks ${sizes}: stream ≡ batch`)
+			}
+		}
+	}
+})
+
+test('psola stream — spliced segments stay click-free, level-true and batch-length', () => {
+	// Segments render on their own pitch-synchronous grids: the plain crossfade cancelled
+	// (−3 dB) and kinked (72× a clean sine's curvature); renders also began after a silent
+	// gap and ended cut off
+	let sr = 44100, n = 2 * sr, f0 = 220, amp = 0.5
+	let x = Float32Array.from({ length: n }, (_, i) => amp * Math.sin(2 * Math.PI * f0 * i / sr) * Math.min(1, i / 2205, (n - i) / 2205))
+	let curve = amp * (2 * Math.PI * f0 / sr) ** 2
+	for (let factor of [0.2, 0.5, 1.5, 3]) {
+		for (let y of [psola(Float32Array.from(x), { factor, sampleRate: sr }), streamed(psola, x, { factor, sampleRate: sr }, [997])]) {
+			is(y.length, Math.round(n * factor), `×${factor}: length`)
+			let g = 0, e = 0, a = Math.floor(y.length * 0.1), b = Math.floor(y.length * 0.9)
+			for (let i = 1; i < y.length - 1; i++) g = Math.max(g, Math.abs(y[i + 1] - 2 * y[i] + y[i - 1]) / curve)
+			for (let i = a; i < b; i++) e += y[i] * y[i]
+			ok(g < 3, `×${factor}: curvature ≤ ${g.toFixed(1)}× a clean sine's`)
+			almost(20 * Math.log10(Math.sqrt(e / (b - a)) / (amp / Math.SQRT2)), 0, 0.5, `×${factor}: level`)
+		}
+	}
+})
+
+test('sms — input shorter than one frame stays finite (was NaN)', () => {
+	for (let len of [1, 100, 2047]) {
+		let x = Float32Array.from({ length: len }, (_, i) => 0.5 * Math.sin(i * 0.05))
+		ok(sms(x, { factor: 2 }).every(Number.isFinite), `${len} samples: batch finite`)
+		ok(streamed(sms, x, { factor: 2 }, [300]).every(Number.isFinite), `${len} samples: stream finite`)
+	}
+})
+
+test('paulstretch — level stays flat across the grain hop (random-phase grains add power)', () => {
+	// Normalizing uncorrelated grains by Σw², as for coherent frames, left a 2.7 dB tremolo
+	// at the hop rate and a 2.7 dB loss
+	let seed = 7, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1
+	let x = Float32Array.from({ length: 44100 * 2 }, () => 0.3 * rnd()), y = paulstretch(x, { factor: 8 })
+	let hop = 2048, e = new Float64Array(8), n = new Float64Array(8), all = 0
+	for (let i = 44100 * 2; i < y.length - 44100 * 2; i++) { let b = Math.floor(i % hop / (hop / 8)); e[b] += y[i] * y[i]; n[b]++; all += y[i] * y[i] }
+	let ref = 0.09 / 3, db = [...e].map((v, b) => 10 * Math.log10(v / n[b] / ref))
+	ok(Math.max(...db) - Math.min(...db) < 0.3, `ripple across the hop ${(Math.max(...db) - Math.min(...db)).toFixed(2)} dB`)
+	almost(10 * Math.log10(all / (y.length - 44100 * 4) / ref), 0, 0.3, 'level matches the input')
+})

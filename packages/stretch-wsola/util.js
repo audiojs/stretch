@@ -20,7 +20,7 @@ export function makeStreamBufs(N, nf = 0) {
   let st = {
     ib: new Float32Array(N * 4), il: 0,
     ob: new Float32Array(N * 8), nb: new Float32Array(N * 8),
-    pos: 0, oread: 0,
+    pos: 0, oread: 0, hi: 0,   // hi: end of the furthest frame overlap-added so far
 
     appendIn(chunk) {
       let need = st.il + chunk.length
@@ -32,6 +32,7 @@ export function makeStreamBufs(N, nf = 0) {
     },
 
     growOut(need) {
+      st.hi = Math.max(st.hi, need)
       if (need <= st.ob.length) return
       let len = Math.max(need * 2, st.ob.length * 2)
       let o = new Float32Array(len), n = new Float32Array(len)
@@ -50,13 +51,15 @@ export function makeStreamBufs(N, nf = 0) {
       let out = new Float32Array(len)
       for (let i = 0; i < len; i++) {
         let j = st.oread + i, n = nf > 0 ? Math.max(st.nb[j], nf) : st.nb[j]
-        out[i] = n > 1e-8 ? st.ob[j] / n : 0
+        out[i] = n > 1e-8 ? st.ob[j] / n : st.ob[j]   // as the batch normalize: near-zero weight stays raw
       }
       st.oread += len
       if (st.oread > N * 8) {
+        // shift left; zero only past the high-water mark: frames extend up to N − hop
+        // beyond pos, and zeroing from pos erased their unfinished overlap-add tails
         st.ob.copyWithin(0, st.oread); st.nb.copyWithin(0, st.oread)
-        st.pos -= st.oread; st.oread = 0
-        st.ob.fill(0, st.pos); st.nb.fill(0, st.pos)
+        st.pos -= st.oread; st.hi -= st.oread; st.oread = 0
+        st.ob.fill(0, st.hi); st.nb.fill(0, st.hi)
       }
       return out
     }

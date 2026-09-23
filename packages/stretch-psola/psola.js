@@ -374,8 +374,9 @@ function marks(data, contour, minP, maxP) {
 }
 
 function addGrain(data, srcPos, left, right, out, norm, dstPos) {
-  left = Math.max(1, Math.round(left))
-  right = Math.max(1, Math.round(right))
+  // a lobe the input cuts short is shortened instead, so its window still reaches zero
+  left = Math.max(1, Math.min(Math.round(left), srcPos))
+  right = Math.max(1, Math.min(Math.round(right), data.length - srcPos))
   for (let i = -left; i < right; i++) {
     let si = srcPos + i
     let di = dstPos + i
@@ -393,13 +394,17 @@ function render(data, outLen, factor, markPos, periods, voiced, minP, maxP) {
   let norm = new Float32Array(outLen)
   if (!markPos.length) return { out, norm }
 
+  // Grains cover the whole output: step back from the first mark to sample 0, and past the
+  // last mark repeat its grain until no left lobe reaches the end (the input may cut its
+  // right lobe short); starting at the first mark and stopping at the last left silence
+  // at both ends, cut off mid-waveform
   let synPos = Math.round(markPos[0] * factor)
+  while (synPos > 0) synPos -= clamp(periods[0], minP * 0.75, maxP * 1.25)
   let cursor = 0
   let last = markPos.length - 1
 
-  while (synPos < outLen) {
+  while (synPos - maxP * 2 < outLen) {
     let srcTime = synPos / factor
-    if (srcTime > markPos[last] + periods[last]) break
 
     while (cursor + 1 < markPos.length && markPos[cursor + 1] <= srcTime) cursor++
 
@@ -473,6 +478,7 @@ function psolaBatch(data, opts) {
 
 function psolaStream(opts) {
   let factor = opts?.factor ?? 1
+  if (factor === 1) return { write: chunk => new Float32Array(chunk), flush: () => new Float32Array(0) }   // as batch
   let sr = opts?.sampleRate || 44100
   let maxP = Math.ceil(sr / (opts?.minFreq || 80))
   let batchOpts = { factor, sampleRate: sr, minFreq: opts?.minFreq, maxFreq: opts?.maxFreq }
@@ -483,38 +489,68 @@ function psolaStream(opts) {
   let pitchHop = Math.max(12, Math.floor((Math.floor(sr / (opts?.maxFreq || 500))) * 0.75))
 
   let inBuf = new Float32Array(segLen * 2)
-  let inLen = 0
-  let tail = null
+  let inLen = 0, fed = 0, sent = 0
+  let tail = null          // last outOlap samples of the previous segment, not yet emitted
+  let drift = 0            // samples the splices have shortened the output by so far
   let streamOffset = 0
   let contourCache = null
 
   function concat(parts) {
     let n = 0
     for (let p of parts) n += p.length
-    if (!n) return new Float32Array(0)
-    let out = new Float32Array(n)
-    let off = 0
+    let out = new Float32Array(n), off = 0
     for (let p of parts) { out.set(p, off); off += p.length }
     return out
   }
 
-  function blend(out, results) {
-    if (tail) {
-      let xLen = Math.min(tail.length, out.length, outOlap)
-      let xf = new Float32Array(xLen)
-      for (let i = 0; i < xLen; i++) {
-        let w = (i + 0.5) / xLen
-        xf[i] = tail[i] * (1 - w) + out[i] * w
-      }
-      results.push(xf)
-      let emitEnd = out.length - outOlap
-      if (emitEnd > xLen) results.push(new Float32Array(out.subarray(xLen, emitEnd)))
-      tail = emitEnd < out.length ? new Float32Array(out.subarray(Math.max(xLen, emitEnd))) : null
-    } else {
-      let emitEnd = out.length - outOlap
-      if (emitEnd > 0) results.push(new Float32Array(out.subarray(0, emitEnd)))
-      tail = new Float32Array(out.subarray(Math.max(0, emitEnd)))
+  // Splice a segment's render onto the retained tail. Segments render independently, so
+  // their pitch-synchronous grains sit on different grids and a plain crossfade of the two
+  // cancelled and kinked: slide the new render by the lag (within ±maxP, drift kept within
+  // ±maxP) where it best matches the tail, then crossfade. `last` keeps the whole render.
+  function splice(out, results, last) {
+    if (!tail) {
+      let emitEnd = last ? out.length : Math.max(0, out.length - outOlap)
+      results.push(out.subarray(0, emitEnd))
+      tail = last ? null : out.slice(emitEnd)
+      return
     }
+    let T = Math.min(tail.length, out.length), D = Math.min(maxP, T >> 2)
+    let lo = Math.max(-D, -maxP - drift), hi = Math.min(D, maxP - drift, out.length - T)
+    let lag = 0, best = -Infinity
+    for (let L = lo; L <= hi; L++) {
+      let c = 0
+      for (let i = D; i < T; i += 2) c += tail[i] * out[i + L]
+      if (c > best) { best = c; lag = L }
+    }
+    let xf = new Float32Array(T)
+    for (let i = 0; i < T; i++) {
+      let w = i < D ? 0 : (i - D + 0.5) / (T - D)
+      xf[i] = tail[i] * (1 - w) + (i + lag >= 0 ? out[i + lag] : 0) * w
+    }
+    results.push(xf)
+    drift += lag
+    let rest = out.subarray(Math.max(0, T + lag))
+    let emitEnd = last ? rest.length : Math.max(0, rest.length - outOlap)
+    results.push(rest.subarray(0, emitEnd))
+    tail = last ? null : rest.slice(emitEnd)
+  }
+
+  function segment(len, f = factor) {
+    let seg = inBuf.slice(0, len)
+    let { out, contour } = psolaBatchCore(seg, { ...batchOpts, factor: f, pitchHop, contourCache, segmentOffset: streamOffset })
+    contourCache = contour
+    return out
+  }
+
+  function emit(results, end) {
+    let out = concat(results)
+    if (end != null) {   // the batch length: pad or trim what the splices shifted
+      let n = Math.max(0, end - sent), fit = new Float32Array(n)
+      fit.set(out.subarray(0, n))
+      out = fit
+    }
+    sent += out.length
+    return out
   }
 
   return {
@@ -525,45 +561,30 @@ function psolaStream(opts) {
         inBuf = nb
       }
       inBuf.set(chunk, inLen)
-      inLen += chunk.length
+      inLen += chunk.length; fed += chunk.length
       let results = []
       while (inLen >= segLen) {
-        let seg = new Float32Array(segLen)
-        seg.set(inBuf.subarray(0, segLen))
-        let { out, contour } = psolaBatchCore(seg, { ...batchOpts, pitchHop, contourCache, segmentOffset: streamOffset })
-        blend(out, results)
-        contourCache = contour
+        splice(segment(segLen), results, false)
         inBuf.copyWithin(0, advance, inLen)
         inLen -= advance
         streamOffset += advance
       }
-      return concat(results)
+      return emit(results)
     },
     flush() {
-      let results = []
+      let results = [], end = Math.round(fed * factor)
       if (inLen > 0) {
-        let seg = new Float32Array(inLen)
-        seg.set(inBuf.subarray(0, inLen))
-        let { out } = psolaBatchCore(seg, { ...batchOpts, pitchHop, contourCache, segmentOffset: streamOffset })
-        if (tail) {
-          let xLen = Math.min(tail.length, out.length, outOlap)
-          let xf = new Float32Array(xLen)
-          for (let i = 0; i < xLen; i++) {
-            let w = (i + 0.5) / xLen
-            xf[i] = tail[i] * (1 - w) + out[i] * w
-          }
-          results.push(xf)
-          if (out.length > xLen) results.push(new Float32Array(out.subarray(xLen)))
-        } else {
-          results.push(out)
-        }
-        inLen = 0
-      } else if (tail) {
-        results.push(tail)
+        // render the last segment just long enough to land on the batch length whatever
+        // lag its splice takes (≤ spare), then trim: splices shift the output by their
+        // drift, and zero-padding that cut the waveform
+        let spare = tail ? Math.min(maxP, tail.length >> 2) : 0
+        let len = Math.max(1, end - sent + spare)
+        splice(segment(inLen, len / inLen), results, true)
       }
+      else if (tail) results.push(tail)
       tail = null
       contourCache = null
-      return concat(results)
+      return emit(results, end)
     }
   }
 }

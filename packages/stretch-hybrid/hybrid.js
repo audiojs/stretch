@@ -11,7 +11,8 @@
 // - FitzGerald, D. (2010). "Harmonic/Percussive Separation Using Median Filtering."
 //   DAFx-10.
 
-import { stft, istft } from 'fourier-transform/stft'
+import { fft, ifft } from 'fourier-transform'
+import { stft, istft, winSqFloor } from 'fourier-transform/stft'
 import wsola from '@audio/stretch-wsola'
 import pvocLock from '@audio/stretch-pvoc-lock'
 import { writer } from './util.js'
@@ -27,39 +28,39 @@ function median(arr, n) {
   return n & 1 ? arr[n >> 1] : 0.5 * (arr[(n >> 1) - 1] + arr[n >> 1])
 }
 
+// Mask frames[f] into harmonic h and percussive p spectra: time median over frames
+// g0..g1 (the harmonic ridge), frequency median over ±fHalf bins (the percussive spike).
+function maskFrame(frames, f, g0, g1, fHalf, half, h, p) {
+  if (_med.length < Math.max(g1 - g0 + 1, 2 * fHalf + 1)) _med = new Float64Array(Math.max(g1 - g0 + 1, 2 * fHalf + 1))
+  let { re, im, mag } = frames[f]
+  for (let k = 0; k <= half; k++) {
+    let c = 0
+    for (let g = g0; g <= g1; g++) _med[c++] = frames[g].mag[k]
+    let H = median(_med, c)
+    let k0 = Math.max(0, k - fHalf), k1 = Math.min(half, k + fHalf)
+    c = 0
+    for (let b = k0; b <= k1; b++) _med[c++] = mag[b]
+    let P = median(_med, c)
+    // hard-ish separation (power 4): soft masks leak the tonal bed into the
+    // percussive layer, where OLA then modulates it
+    let h4 = H * H * H * H, p4 = P * P * P * P, denom = h4 + p4
+    let mH = denom > 1e-40 ? h4 / denom : 0.5
+    h.re[k] = re[k] * mH; h.im[k] = im[k] * mH
+    p.re[k] = re[k] - h.re[k]; p.im[k] = im[k] - h.im[k]   // masks sum to 1
+  }
+}
+
 // Split data into [harmonic, percussive] via median-filter HPSS + power-Wiener masks.
 function hpssSplit(data, N, hop, tMed, fMed) {
   let frames = stft(data, { frameSize: N, hopSize: hop })
-  let nF = frames.length, half = N >> 1
-  let win = Math.max(tMed, fMed)
-  if (_med.length < win) _med = new Float64Array(win)
-
+  let nF = frames.length, half = N >> 1, tHalf = tMed >> 1, fHalf = fMed >> 1
   let hFrames = new Array(nF), pFrames = new Array(nF)
-  let tHalf = tMed >> 1, fHalf = fMed >> 1
   for (let f = 0; f < nF; f++) {
-    let { re, im, mag, time } = frames[f]
-    let hRe = new Float64Array(half + 1), hIm = new Float64Array(half + 1)
-    let pRe = new Float64Array(half + 1), pIm = new Float64Array(half + 1)
-    let f0 = Math.max(0, f - tHalf), f1 = Math.min(nF - 1, f + tHalf)
-    for (let k = 0; k <= half; k++) {
-      let c = 0
-      for (let g = f0; g <= f1; g++) _med[c++] = frames[g].mag[k]
-      let H = median(_med, c)
-      let k0 = Math.max(0, k - fHalf), k1 = Math.min(half, k + fHalf)
-      c = 0
-      for (let b = k0; b <= k1; b++) _med[c++] = mag[b]
-      let P = median(_med, c)
-      // hard-ish separation (power 4): soft masks leak the tonal bed into the
-      // percussive layer, where OLA then modulates it
-      let h4 = H * H * H * H, p4 = P * P * P * P, denom = h4 + p4
-      let mH = denom > 1e-40 ? h4 / denom : 0.5
-      hRe[k] = re[k] * mH; hIm[k] = im[k] * mH
-      pRe[k] = re[k] - hRe[k]; pIm[k] = im[k] - hIm[k]   // masks sum to 1
-    }
-    hFrames[f] = { re: hRe, im: hIm, time }
-    pFrames[f] = { re: pRe, im: pIm, time }
+    let h = { re: new Float64Array(half + 1), im: new Float64Array(half + 1), time: frames[f].time }
+    let p = { re: new Float64Array(half + 1), im: new Float64Array(half + 1), time: frames[f].time }
+    maskFrame(frames, f, Math.max(0, f - tHalf), Math.min(nF - 1, f + tHalf), fHalf, half, h, p)
+    hFrames[f] = h; pFrames[f] = p
   }
-
   let harm = istft(hFrames, { frameSize: N, hopSize: hop, signalLength: data.length })
   let perc = istft(pFrames, { frameSize: N, hopSize: hop, signalLength: data.length })
   return [new Float32Array(harm), new Float32Array(perc)]
@@ -89,88 +90,125 @@ function hybridBatch(data, opts) {
   return out
 }
 
-function hybridStream(opts) {
-  let factor = opts?.factor ?? 1
-  let frameSize = opts?.frameSize ?? 2048
-  let segLen = frameSize * 8
-  let advance = segLen >> 1
-  let outOlap = Math.round((segLen - advance) * factor)
+// Growable sample queue with an absolute start index.
+function queue(Type = Float32Array) {
+  let q = { buf: new Type(4096), start: 0, len: 0 }
+  q.push = chunk => {
+    if (q.len + chunk.length > q.buf.length) { let b = new Type(Math.max(2 * q.buf.length, q.len + chunk.length)); b.set(q.buf.subarray(0, q.len)); q.buf = b }
+    q.buf.set(chunk, q.len); q.len += chunk.length
+  }
+  q.drop = n => { q.buf.copyWithin(0, n, q.len); q.buf.fill(0, q.len - n, q.len); q.len -= n; q.start += n }
+  return q
+}
 
-  let inBuf = new Float32Array(segLen * 2)
-  let inLen = 0
-  let tail = null
+// hpssSplit, run incrementally: frame k (input k·hop − N ..< k·hop, zero outside the
+// signal) is analyzed once its input is in, masked once its time-median window is, and
+// overlap-added; a sample is emitted once every frame covering it has been. Same
+// frames, same arithmetic: the layers equal the batch split under any chunking.
+function hpssStream(N, hop, tMed, fMed, onLayers) {
+  let half = N >> 1, tHalf = tMed >> 1, fHalf = fMed >> 1
+  let win = new Float64Array(N)
+  for (let i = 0; i < N; i++) win[i] = 0.5 * (1 - Math.cos(Math.PI * 2 * i / N))
+  let floor = winSqFloor(win, hop)
+  let input = queue(), frames = [], first = 0          // frames[0] is frame `first`
+  let nextFrame = 0, nextMask = 0, fed = 0
+  let hAcc = queue(Float64Array), pAcc = queue(Float64Array), nAcc = queue(Float64Array)
+  let f = new Float64Array(N), re = new Float64Array(half + 1), im = new Float64Array(half + 1)
+  let h = { re: new Float64Array(half + 1), im: new Float64Array(half + 1) }, p = { re: new Float64Array(half + 1), im: new Float64Array(half + 1) }
 
-  function concat(parts) {
-    let n = 0
-    for (let p of parts) n += p.length
-    if (!n) return new Float32Array(0)
-    let out = new Float32Array(n)
-    let off = 0
-    for (let p of parts) { out.set(p, off); off += p.length }
-    return out
+  function analyze(k, len) {
+    for (let i = 0; i < N; i++) {
+      let j = k * hop - N + i
+      f[i] = (j >= 0 && j < len ? input.buf[j - input.start] : 0) * win[i]
+    }
+    let [r, m] = fft(f, [re, im])
+    let frame = { re: new Float64Array(r), im: new Float64Array(m), mag: new Float64Array(half + 1) }
+    for (let k = 0; k <= half; k++) frame.mag[k] = Math.sqrt(frame.re[k] * frame.re[k] + frame.im[k] * frame.im[k])
+    frames.push(frame); nextFrame++
   }
 
-  // Crossfade the retained overlap of the previous segment into the new one.
-  function blend(out, results) {
-    if (tail) {
-      let xLen = Math.min(tail.length, out.length, outOlap)
-      let xf = new Float32Array(xLen)
-      for (let i = 0; i < xLen; i++) {
-        let w = (i + 0.5) / xLen
-        xf[i] = tail[i] * (1 - w) + out[i] * w
-      }
-      results.push(xf)
-      let emitEnd = out.length - outOlap
-      if (emitEnd > xLen) results.push(new Float32Array(out.subarray(xLen, emitEnd)))
-      tail = emitEnd < out.length ? new Float32Array(out.subarray(Math.max(xLen, emitEnd))) : null
-    } else {
-      let emitEnd = out.length - outOlap
-      if (emitEnd > 0) results.push(new Float32Array(out.subarray(0, emitEnd)))
-      tail = new Float32Array(out.subarray(Math.max(0, emitEnd)))
+  // overlap-add one frame's samples (input position k·hop − N on), clipped to [0, len)
+  function ola(acc, sf, k, len) {
+    let end = Math.min(k * hop, len) - acc.start
+    if (end > acc.len) acc.push(new Float64Array(end - acc.len))
+    for (let i = 0; i < N; i++) {
+      let j = k * hop - N + i
+      if (j >= acc.start && j < len) acc.buf[j - acc.start] += sf ? sf[i] * win[i] : win[i] * win[i]
     }
+  }
+
+  function mask(k, last, len) {
+    maskFrame(frames, k - first, Math.max(0, k - tHalf) - first, Math.min(last, k + tHalf) - first, fHalf, half, h, p)
+    ola(hAcc, ifft(h.re, h.im, f), k, len); ola(pAcc, ifft(p.re, p.im, f), k, len); ola(nAcc, null, k, len)
+    nextMask++
+    let drop = Math.min(frames.length, nextMask - tHalf - first)
+    if (drop > 0) { frames.splice(0, drop); first += drop }
+  }
+
+  // hand over samples before `end`: no frame still to come reaches them
+  function emit(end) {
+    let n = Math.min(end - hAcc.start, hAcc.len)
+    if (n <= 0) return
+    let hh = new Float32Array(n), pp = new Float32Array(n)
+    for (let i = 0; i < n; i++) {
+      let w = nAcc.buf[i] < floor ? floor : nAcc.buf[i]
+      hh[i] = w > 1e-10 ? hAcc.buf[i] / w : 0
+      pp[i] = w > 1e-10 ? pAcc.buf[i] / w : 0
+    }
+    hAcc.drop(n); pAcc.drop(n); nAcc.drop(n)
+    let keep = Math.max(0, first * hop - N)   // input no remaining frame reads
+    if (keep - input.start > N) input.drop(keep - input.start)
+    onLayers(hh, pp)
   }
 
   return {
     write(chunk) {
-      if (inLen + chunk.length > inBuf.length) {
-        let nb = new Float32Array(Math.max((inLen + chunk.length) * 2, inBuf.length * 2))
-        nb.set(inBuf.subarray(0, inLen))
-        inBuf = nb
-      }
-      inBuf.set(chunk, inLen)
-      inLen += chunk.length
-      let results = []
-      while (inLen >= segLen) {
-        let seg = new Float32Array(inBuf.subarray(0, segLen))
-        blend(hybridBatch(seg, opts), results)
-        inBuf.copyWithin(0, advance, inLen)
-        inLen -= advance
-      }
-      return concat(results)
+      input.push(chunk); fed += chunk.length
+      while (nextFrame * hop <= fed) analyze(nextFrame, fed)
+      while (nextMask + tHalf < nextFrame) mask(nextMask, Infinity, Infinity)
+      emit(nextMask * hop - N)
     },
     flush() {
-      let results = []
-      if (inLen > 0) {
-        let seg = new Float32Array(inBuf.subarray(0, inLen))
-        let out = hybridBatch(seg, opts)
-        if (tail) {
-          let xLen = Math.min(tail.length, out.length, outOlap)
-          let xf = new Float32Array(xLen)
-          for (let i = 0; i < xLen; i++) {
-            let w = (i + 0.5) / xLen
-            xf[i] = tail[i] * (1 - w) + out[i] * w
-          }
-          results.push(xf)
-          if (out.length > xLen) results.push(new Float32Array(out.subarray(xLen)))
-        } else {
-          results.push(out)
-        }
-        inLen = 0
-      } else if (tail) {
-        results.push(tail)
-      }
-      tail = null
-      return concat(results)
+      let nF = fed ? Math.floor((fed + N) / hop) + 1 : 0
+      while (nextFrame < nF) analyze(nextFrame, fed)
+      while (nextMask < nF) mask(nextMask, nF - 1, fed)
+      while (hAcc.start + hAcc.len < fed) { hAcc.push(new Float64Array(fed - hAcc.start - hAcc.len)); pAcc.push(new Float64Array(fed - pAcc.start - pAcc.len)); nAcc.push(new Float64Array(fed - nAcc.start - nAcc.len)) }
+      emit(fed)
+    }
+  }
+}
+
+function hybridStream(opts) {
+  let factor = opts?.factor ?? 1
+  if (factor === 1) return { write: chunk => new Float32Array(chunk), flush: () => new Float32Array(0) }   // as batch
+  let frameSize = opts?.frameSize ?? 2048
+  let hopSize = opts?.hopSize ?? (frameSize >> 2)
+  let percFrame = opts?.percFrame ?? 512
+
+  // The batch pipeline as streams: HPSS layers feed a phase-locked vocoder and a short-frame
+  // OLA, and the two outputs sum sample-aligned, zero past the shorter one at the end
+  let harm = pvocLock({ factor, frameSize, hopSize })
+  let perc = wsola({ factor, frameSize: percFrame, delta: 0 })
+  let yh = queue(), yp = queue(), fed = 0
+  let split = hpssStream(frameSize, hopSize, opts?.harmMedian ?? 17, opts?.percMedian ?? 17, (hh, pp) => { yh.push(harm(hh)); yp.push(perc(pp)) })
+
+  function sum(n) {
+    let out = new Float32Array(Math.max(0, n))
+    for (let i = 0; i < out.length; i++) out[i] = (i < yh.len ? yh.buf[i] : 0) + (i < yp.len ? yp.buf[i] : 0)
+    yh.drop(Math.min(out.length, yh.len)); yp.drop(Math.min(out.length, yp.len))
+    return out
+  }
+
+  return {
+    write(chunk) {
+      fed += chunk.length
+      split.write(chunk)
+      return sum(Math.min(yh.len, yp.len, Math.round(fed * factor) - yh.start))
+    },
+    flush() {
+      split.flush()
+      yh.push(harm()); yp.push(perc())
+      return sum(Math.round(fed * factor) - yh.start)
     }
   }
 }

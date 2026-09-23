@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-sms",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Sinusoidal Modeling Synthesis time stretching — harmonic/tonal material",
   "type": "module",
   "sideEffects": false,

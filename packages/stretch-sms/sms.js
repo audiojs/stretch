@@ -175,7 +175,7 @@ function analyzeFrame(data, pos, win, N, half, thresh, prev, nTracks, maxDev, pr
   if (_buf.length !== N) _buf = new Float64Array(N)
   if (_mag.length < half + 1) _mag = new Float64Array(half + 1)
   let buf = _buf
-  for (let i = 0; i < N; i++) buf[i] = data[pos + i] * win[i]
+  for (let i = 0; i < N; i++) buf[i] = (pos + i < data.length ? data[pos + i] : 0) * win[i]   // zero-pad a short input
   let [re, im] = fft(buf)
   let mag = _mag
   for (let k = 0; k <= half; k++) mag[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k])
@@ -263,9 +263,10 @@ export default function sms(data, opts = {}) {
   let out = new Float32Array(outLen), nrm = new Float32Array(outLen)
   let phi = new Float64Array(nTracks)
 
-  for (let s = 0; ; s++) {
+  // a frame at every hop through the last sample: stopping at the last frame that fits
+  // left up to N − 1 silent samples at the end
+  for (let s = 0; s * hop < outLen; s++) {
     let sPos = s * hop
-    if (sPos + N > outLen) break
     let af = Math.min(s / factor, nAna - 1)
     let f0 = Math.floor(af), f1 = Math.min(f0 + 1, nAna - 1), alpha = af - f0
     let fr = synthFrame(frames[f0].tracks, frames[f1].tracks, frames[f0].residual, frames[f1].residual, alpha, nTracks, phi, half, N, hop, noiseState, residualMix)
@@ -290,58 +291,73 @@ function smsStream(opts = {}) {
   let residualMix = clamp(opts.residualMix ?? 1, 0, 1)
   let win = hannWindow(N)
   let noiseState = createNoiseState()
+  if (factor === 1) return { write: chunk => new Float32Array(chunk), flush: () => new Float32Array(0) }   // as batch
 
   let st = makeStreamBufs(N)
-  // Two frame slots ping-ponged: each analysis writes into the retiring slot,
-  // so the steady-state stream allocates nothing per frame.
+  // The batch passes, run incrementally: frame f analyzes input at f·hop, synthesis frame
+  // s interpolates analysis frames at s / factor, exactly as there (stream ≡ batch under
+  // any chunking). Two frame slots ping-pong: each analysis writes into the retiring
+  // slot, so the steady-state stream allocates nothing per frame.
   let slotA = makeFrame(nTracks, half)
   let slotB = makeFrame(nTracks, half)
-  let prevFrame = slotA
-  let currFrame = null
+  let prevFrame = null, currFrame = null   // analysis frames anaIdx − 2 and anaIdx − 1
   let phi = new Float64Array(nTracks)
-  let anaIdx = 0, synIdx = 0, anaPos = 0
+  let anaIdx = 0, synIdx = 0, anaPos = 0, fed = 0, sent = 0
 
-  function synthOne(alpha) {
+  // Synthesis frame synIdx between analysis frames f0 and f0 + 1 (or f0 alone at the end)
+  function synthOne(t0, t1, alpha) {
     st.growOut(st.pos + N)
     let ob = st.ob, nb = st.nb, base = st.pos
-    let fr = synthFrame(prevFrame.tracks, currFrame.tracks, prevFrame.residual, currFrame.residual, alpha, nTracks, phi, half, N, hop, noiseState, residualMix)
-    for (let i = 0; i < N && base + i < ob.length; i++) {
+    let fr = synthFrame(t0.tracks, t1.tracks, t0.residual, t1.residual, alpha, nTracks, phi, half, N, hop, noiseState, residualMix)
+    for (let i = 0; i < N; i++) {
       let w2 = win[i] * win[i]; ob[base + i] += fr[i] * w2; nb[base + i] += w2
     }
     st.pos += hop; synIdx++
   }
 
+  // A synthesis frame runs once both analysis frames it needs exist and it starts inside
+  // round(fed · factor), a floor on the final output length
   function emitSynth() {
-    if (anaIdx < 2) return
-    while (synIdx / factor < anaIdx - 1) synthOne(synIdx / factor - (anaIdx - 2))
+    while (synIdx / factor < anaIdx - 1 && synIdx * hop < Math.round(fed * factor))
+      synthOne(prevFrame, currFrame, synIdx / factor - (anaIdx - 2))
   }
 
   function processInput() {
     while (anaPos + N <= st.il) {
-      let source = currFrame || prevFrame
-      let target = source === slotA ? slotB : slotA
-      analyzeFrame(st.ib, anaPos, win, N, half, thresh, source.tracks, nTracks, maxDev, source.residual, target)
-      prevFrame = source; currFrame = target
+      let target = currFrame === slotA ? slotB : slotA
+      analyzeFrame(st.ib, anaPos, win, N, half, thresh, currFrame ? currFrame.tracks : slotB.tracks, nTracks, maxDev, currFrame?.residual, target)
+      prevFrame = currFrame; currFrame = target
       anaIdx++; anaPos += hop
       emitSynth()
     }
     if (anaPos > N * 2) { let trim = anaPos - N; st.compactIn(trim); anaPos -= trim }
   }
 
+  // Emit up to absolute output sample `end`: samples before synIdx·hop are final
+  function emit(end) {
+    let out = st.take(st.pos - synIdx * hop + end)
+    sent += out.length
+    return out
+  }
+
   return {
     write(chunk) {
-      st.appendIn(chunk)
-      processInput()
-      return st.take(Math.max(0, st.pos - N + hop))
+      st.appendIn(chunk); fed += chunk.length
+      processInput(); emitSynth()
+      return emit(Math.min(synIdx * hop, Math.round(fed * factor)))
     },
     flush() {
-      if (anaIdx >= 2 && currFrame) {
-        while (synIdx / factor < anaIdx) {
-          let af = Math.min(synIdx / factor, anaIdx - 1)
-          synthOne(Math.min(af - (anaIdx - 2), 1))
-        }
+      let outLen = Math.round(fed * factor)
+      if (!anaIdx) {   // shorter than a frame: batch analyzes one zero-padded frame
+        analyzeFrame(st.ib.subarray(0, st.il), 0, win, N, half, thresh, slotB.tracks, nTracks, maxDev, null, slotA)
+        currFrame = slotA; anaIdx = 1
       }
-      return st.take(st.pos)
+      while (synIdx * hop < outLen) {
+        let af = Math.min(synIdx / factor, anaIdx - 1), f0 = Math.floor(af)
+        if (f0 >= anaIdx - 1) synthOne(currFrame, currFrame, 0)
+        else synthOne(prevFrame, currFrame, af - f0)
+      }
+      return emit(outLen)
     }
   }
 }

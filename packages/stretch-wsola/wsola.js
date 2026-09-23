@@ -89,72 +89,72 @@ function wsolaStream(opts) {
   let synHop = hopSize
   let anaHop = hopSize / factor
   let corrLen = corrLength(frameSize, synHop)
+  if (factor === 1) return { write: chunk => new Float32Array(chunk), flush: () => new Float32Array(0) }   // as batch
 
   let st = makeStreamBufs(frameSize)
-  let aPos = 0
-  // Track absolute position of last read so the natural-progression target
-  // survives input compaction (st.compactIn shifts ib).
-  let prevReadAbs = 0
-  let inOffset = 0  // absolute position of ib[0]
+  // The batch loop, run incrementally: positions are absolute and advance exactly as
+  // there, so every grain reads where the batch grain reads (stream ≡ batch under any
+  // chunking). ib[0] sits at absolute input position `inOffset`.
+  let anaPos = 0, synPos = 0, prevReadPos = 0, inOffset = 0, fed = 0, sent = 0
 
-  // `final` mirrors the batch function's synPos<outLen: keep re-aligning within
-  // the final real frame (nomPos capped at maxRead) until analysis has nominally
-  // caught up with all buffered input, instead of stopping early because the
-  // *uncapped* aPos+frameSize no longer fits — that premature stop is correct
-  // behavior mid-stream (wait for more chunks) but wrong at flush (no more chunks
-  // are coming, so the tail must still be covered).
-  function run(final) {
-    let maxRead = Math.max(0, st.il - frameSize)
-    while (final ? Math.round(aPos) < st.il : Math.round(aPos) + frameSize <= st.il) {
-      let nomPos = Math.min(Math.round(aPos), maxRead)
-      let readPos = nomPos
+  // One grain at synPos. `inLen` is the total input length once known (flush); before
+  // that it is Infinity and a grain runs only when its whole search span has arrived.
+  function grain(inLen) {
+    let maxRead = Math.max(0, inLen - frameSize)
+    let nomPos = Math.min(Math.round(anaPos), maxRead)
+    let readPos = nomPos
+    let ib = st.ib, o = inOffset
 
-      if (st.pos > 0 && delta > 0) {
-        let searchS = Math.max(0, nomPos - delta)
-        let searchE = Math.min(maxRead, nomPos + delta)
-        let targetStart = (prevReadAbs - inOffset) + synHop
-        let L = Math.min(corrLen, st.il - targetStart, st.il - searchE)
-        if (targetStart >= 0 && L > 0) {
-          let step = L > 768 ? 2 : 1
-          let bestCorr = -Infinity, bestS = searchS
-          let ib = st.ib
-          for (let s = searchS; s <= searchE; s++) {
-            let corr = 0
-            for (let i = 0; i < L; i += step) corr += ib[s + i] * ib[targetStart + i]
-            if (corr > bestCorr) { bestCorr = corr; bestS = s }
-          }
-          readPos = bestS
+    if (synPos > 0 && delta > 0) {
+      let searchStart = Math.max(0, nomPos - delta)
+      let searchEnd = Math.min(maxRead, nomPos + delta)
+      let targetStart = prevReadPos + synHop
+      let L = Math.min(corrLen, inLen - targetStart, inLen - searchEnd)
+      if (L > 0) {
+        let step = L > 768 ? 2 : 1
+        let bestCorr = -Infinity, bestS = searchStart
+        for (let s = searchStart; s <= searchEnd; s++) {
+          let corr = 0
+          for (let i = 0; i < L; i += step) corr += ib[s - o + i] * ib[targetStart - o + i]
+          if (corr > bestCorr) { bestCorr = corr; bestS = s }
         }
+        readPos = bestS
       }
+    }
 
-      st.growOut(st.pos + frameSize)
-      let ob = st.ob, nb = st.nb, base = st.pos, ib = st.ib
-      for (let i = 0; i < frameSize; i++) {
-        ob[base + i] += (readPos + i < st.il ? ib[readPos + i] : 0) * win[i]
-        nb[base + i] += win[i]
-      }
-      prevReadAbs = inOffset + readPos
-      aPos += anaHop
-      st.pos += synHop
+    st.growOut(st.pos + frameSize)
+    let ob = st.ob, nb = st.nb, base = st.pos
+    for (let i = 0; i < frameSize; i++) {
+      ob[base + i] += (readPos + i < inLen ? ib[readPos - o + i] : 0) * win[i]
+      nb[base + i] += win[i]
     }
-    let used = Math.floor(aPos)
-    if (used > frameSize * 2 + delta) {
-      let trim = used - frameSize - delta
-      st.compactIn(trim)
-      aPos -= trim
-      inOffset += trim
-    }
+    prevReadPos = readPos
+    anaPos += anaHop
+    synPos += synHop
+    st.pos += synHop
+  }
+
+  // Emit up to absolute output position `end`: samples before synPos are final
+  function emit(end) {
+    let out = st.take(st.pos - synPos + end)
+    sent += out.length
+    return out
   }
 
   return {
     write(chunk) {
-      st.appendIn(chunk)
-      run(false)
-      return st.take(Math.max(0, st.pos - frameSize + synHop))
+      st.appendIn(chunk); fed += chunk.length
+      while (Math.round(anaPos) + delta + frameSize <= fed) grain(Infinity)
+      // drop input no later grain reads: its search span and its correlation target
+      let keep = Math.min(Math.min(Math.round(anaPos), fed - frameSize) - delta, prevReadPos + synHop)
+      if (keep - inOffset > frameSize * 2) { st.compactIn(keep - inOffset); inOffset = keep }
+      // the batch output is round(inputLength · factor) long: never run past that
+      return emit(Math.min(synPos, Math.round(fed * factor)))
     },
     flush() {
-      run(true)
-      return st.take(st.pos)
+      let outLen = Math.round(fed * factor)
+      while (synPos < outLen) grain(fed)
+      return emit(outLen)
     }
   }
 }
