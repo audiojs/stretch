@@ -32,7 +32,8 @@ function process(mag, phase, state, ctx) {
   let p = state.p
   for (let k = 0; k <= half; k++) {
     let dp = wrapPhase(phase[k] - state.prev[k] - k * freqPerBin * anaHop)
-    state.sum[k] += (k * freqPerBin + dp / anaHop) * synHop
+    // wrapped: an unbounded sum grows ~k·synHop·2π/N per frame, and trig past ~1e6 rad takes V8's slow reduction
+    state.sum[k] = wrapPhase(state.sum[k] + (k * freqPerBin + dp / anaHop) * synHop)
     p[k] = state.sum[k]
   }
 

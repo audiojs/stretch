@@ -171,8 +171,9 @@ function makeProcess(tolerance) {
       state.prevPhase[m] = phase[m]
       state.prevMag[m] = mag[m]
       state.prevTgrad[m] = tgrad[m]
-      state.synPrev[m] = p[m]
-      p[m] = p[m] - Math.PI * m   // back to frame-start origin for synthesis
+      // both wrapped: the stored phase would otherwise grow every frame, and trig past ~1e6 rad takes V8's slow reduction
+      state.synPrev[m] = wrapPhase(p[m])
+      p[m] = wrapPhase(p[m] - Math.PI * m)   // back to frame-start origin for synthesis
     }
 
     return { mag, phase: p }

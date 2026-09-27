@@ -1,10 +1,5 @@
 // Local helpers (inlined family convention — no shared-dep package).
 
-// Phase unwrap to [-π, π)
-export function wrapPhase(p) {
-  return p - Math.round(p / (2 * Math.PI)) * (2 * Math.PI)
-}
-
 // Wrap { write, flush } stream into single callable: fn(chunk) → process, fn() → flush
 export function writer(s) {
   return (chunk) => chunk ? s.write(chunk) : s.flush()

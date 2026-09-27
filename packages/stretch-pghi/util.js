@@ -4,7 +4,7 @@ export const PI2 = Math.PI * 2
 
 // Phase unwrap to [-π, π)
 export function wrapPhase(p) {
-  return p - Math.round(p / (2 * Math.PI)) * (2 * Math.PI)
+  return p - Math.floor(p / (2 * Math.PI) + 0.5) * (2 * Math.PI)  // floor(x + 0.5) rounds like Math.round here, several times faster in V8 (hot: per bin per frame)
 }
 
 // Wrap { write, flush } stream into single callable: fn(chunk) → process, fn() → flush
