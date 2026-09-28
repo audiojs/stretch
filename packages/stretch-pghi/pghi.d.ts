@@ -13,7 +13,11 @@ export interface StretchOpts {
   anaHop?: number
 }
 
-export interface PghiOpts extends StretchOpts {
+export interface PghiOpts extends Omit<StretchOpts, 'factor'> {
+  /** time-stretch ratio, or `t => ratio` of source time in seconds (sliding stretch) */
+  factor?: number | ((t: number) => number)
+  /** Hz, for a sliding `factor`, default 44100 */
+  sampleRate?: number
   /** Bins below tolerance×frame-max get random phase (no reliable gradient). Default 1e-6 */
   tolerance?: number
 }

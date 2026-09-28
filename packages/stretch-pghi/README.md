@@ -16,6 +16,8 @@ let out = pghi(data, { factor: 2 })
 | `hopSize` | `frameSize/8` | Hop — gradient integration wants denser frames than peak locking |
 | `tolerance` | `1e-6` | Bins below `tolerance×max` get random phase |
 
+Sliding stretch: `factor` may be a function `t => ratio` of source time in seconds, read at every analysis frame. `pghi(data, { factor: t => t < 5 ? 1 : 2, sampleRate: 48000 })` keeps the first 5 s as is and plays the rest at half speed; `sampleRate` (default `44100`) converts frame positions to `t`.
+
 **Use when:** modulated material — vibrato, glides, chirps, pitch-unstable sources (measured: beats [`@audio/stretch-pvoc-lock`](../stretch-pvoc-lock) on tones/glissandi, ~4× better than plain pvoc on sweeps).<br>
 **Not for:** steady polyphony — identity phase locking reproduces exact intra-region phase relations that first-order gradient integration only approximates; use [`@audio/stretch-pvoc-lock`](../stretch-pvoc-lock) there.
 

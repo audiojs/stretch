@@ -187,7 +187,8 @@ function pghiOpts(opts) {
   if (opts?.hopSize == null) {
     let hopSize = o.frameSize >> 3
     let factor = opts?.factor ?? 1
-    o = { ...o, hopSize, synHop: opts?.synHop ?? hopSize, anaHop: opts?.anaHop ?? hopSize / factor }
+    let anaHop = opts?.anaHop ?? (typeof factor === 'function' ? stretchOpts({ ...opts, hopSize }).anaHop : hopSize / factor)
+    o = { ...o, hopSize, synHop: opts?.synHop ?? hopSize, anaHop }
   }
   return o
 }
