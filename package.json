@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "types": "index.d.ts",
   "description": "Time stretching — umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
@@ -63,9 +63,10 @@
     "@audio/stretch-psola": "^1.0.0",
     "@audio/stretch-pvoc": "^1.0.0",
     "@audio/stretch-pvoc-lock": "^1.0.0",
+    "@audio/stretch-pvsola": "^1.0.0",
     "@audio/stretch-sms": "^1.0.0",
     "@audio/stretch-transient": "^1.0.0",
-    "@audio/stretch-wsola": "^1.0.0"
+    "@audio/stretch-wsola": "^2.0.0"
   },
   "devDependencies": {
     "@audio/quality": "^1.0.0",

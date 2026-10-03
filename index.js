@@ -4,6 +4,7 @@
 export { default as wsola } from '@audio/stretch-wsola'
 export { default as pvoc } from '@audio/stretch-pvoc'
 export { default as pvocLock } from '@audio/stretch-pvoc-lock'
+export { default as pvsola } from '@audio/stretch-pvsola'
 export { default as pghi } from '@audio/stretch-pghi'
 export { default as transient } from '@audio/stretch-transient'
 export { default as hybrid } from '@audio/stretch-hybrid'

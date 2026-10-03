@@ -6,11 +6,12 @@ Time stretching algorithms — umbrella over `@audio/stretch-*` atoms.
 
 | Atom | Algorithm | Domain | Quality | CPU | Best for |
 |---|---|---|---|---|---|
-| [`@audio/stretch-wsola`](#wsola) | WSOLA | time | ★★★ | low | speech, real-time |
+| [`@audio/stretch-wsola`](#wsola) | WSOLA | time | ★★★★ | low | speech, solo voice |
 | [`@audio/stretch-psola`](#psola) | PSOLA | time | ★★★★ | medium | speech, monophonic instruments |
 | [`@audio/stretch-pvoc`](#pvoc) | plain phase vocoder | freq | ★★ | medium | educational baseline |
 | [`@audio/stretch-pvoc-lock`](#pvoc-lock) | phase-locked vocoder | freq | ★★★★ | medium | general music |
 | [`@audio/stretch-pghi`](#pghi) | phase-gradient vocoder | freq | ★★★★ | medium | vibrato, glides, chirps |
+| [`@audio/stretch-pvsola`](#pvsola) | vocoder reset to the waveform | freq+time | ★★★★★ | medium | slowing speech, solo voice |
 | [`@audio/stretch-transient`](#transient) | transient-aware vocoder | freq | ★★★★★ | medium | music with percussion |
 | [`@audio/stretch-hybrid`](#hybrid) | HPSS hybrid | freq+time | ★★★★ | high | full mixes — drums over tonal |
 | [`@audio/stretch-paulstretch`](#paulstretch) | PaulStretch | freq | — | medium | extreme stretch (ambient, drones) |
@@ -56,24 +57,25 @@ let out = transient(samples, { factor: 2 })
 
 ### `wsola` — `@audio/stretch-wsola`
 
-Waveform Similarity Overlap-Add. Divides signal into overlapping frames and places them at new synthesis positions, but before placing each frame searches ±delta samples for the read position that maximizes cross-correlation with the natural progression of the previous grain through the input — eliminating the phase cancellation (flanging) of plain OLA. No FFT overhead.
+Waveform Similarity Overlap-Add, in the segment form of SoundTouch and sox `tempo`. Segments of the input are laid one hop apart, each crossfaded into the one before, and each read where its head best continues the one before (normalized cross-correlation within ±delta of where the time map puts it). The waveform is copied, not resynthesized, so a voice keeps its glottal pulse shape and its consonants keep their attacks. A phase vocoder keeps each harmonic but not their alignment to one another, which is why speech through it sounds distant. Channels share one search. No FFT.
 
 ```js
 import wsola from '@audio/stretch-wsola'
 
 wsola(data, { factor: 1.5 })
-wsola(data, { factor: 0.5, delta: 512 })
+wsola([left, right], { factor: 0.5, sampleRate: 48000 })
 ```
 
 | Param | Default | |
 |---|---|---|
-| `factor` | `1` | Time stretch ratio |
-| `frameSize` | `2048` | Window size |
-| `hopSize` | `frameSize/4` | Hop between frames |
-| `delta` | `frameSize/4` | Search range (±samples) |
+| `factor` | `1` | Time stretch ratio, or a function of input seconds |
+| `sampleRate` | `44100` | |
+| `frameSize` | 40 ms | Segment |
+| `hopSize` | `frameSize · 3/5` | Output hop; segments cross over the rest (16 ms, one period at 62.5 Hz) |
+| `delta` | 8 ms | Search (±), half that period |
 
-**Use when:** Speech, real-time with tight CPU budgets, moderate ratios (0.5–2×).<br>
-**Not for:** Polyphonic music with sustained tones — frequency-domain methods handle harmonics better.
+**Use when:** shortening speech, a solo voice or a monophonic instrument; slowing them, [`pvsola`](#pvsola) (copying repeats noise and reverberation into a flanger).<br>
+**Not for:** chords and mixes. One alignment cannot fit several pitches; use the frequency-domain methods.
 
 
 ### `psola` — `@audio/stretch-psola`
@@ -133,6 +135,26 @@ Same options as [`pvoc`](#pvoc).
 
 **Use when:** General music — tonal/ambient material where transient resets aren't needed.<br>
 **Not for:** Percussive material where attacks matter — use [`transient`](#transient).
+
+
+### `pvsola` — `@audio/stretch-pvsola`
+
+A phase-locked vocoder whose frames restart from the input's own waveform wherever it fits (Moinet & Dutoit, DAFx 2011). Where a voice is periodic its frames take the input's own phases and keep the shape of its glottal pulses; noise, breath and reverberation stay the vocoder's, so slowing never repeats them (WSOLA's flanger) nor spreads the voice (the vocoder's phasiness).
+
+```js
+import pvsola from '@audio/stretch-pvsola'
+pvsola(data, { factor: 1.5 })
+```
+
+| Param | Default | |
+|---|---|---|
+| `factor` | `1` | Time stretch ratio, or a function of input seconds |
+| `sampleRate` | `44100` | |
+| `frameSize` | 46 ms | Frame, a power of 2 |
+| `shift` | 4.5 ms | Shift searched for a reset (±) |
+
+**Use when:** slowing speech or a solo voice.<br>
+**Not for:** shortening, where [`wsola`](#wsola) keeps attacks better.
 
 
 ### `pghi` — `@audio/stretch-pghi`

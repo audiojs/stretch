@@ -1,13 +1,13 @@
 {
-  "name": "@audio/stretch-hybrid",
-  "version": "1.2.3",
-  "description": "Hybrid harmonic/percussive time stretch (Driedger) — HPSS split, phase-locked vocoder + OLA per layer",
+  "name": "@audio/stretch-pvsola",
+  "version": "1.0.0",
+  "description": "PVSOLA time stretching: a phase-locked vocoder reset to the input's own waveform where it fits; speech slowed without flanging or phasiness",
   "type": "module",
   "sideEffects": false,
-  "main": "hybrid.js",
-  "types": "hybrid.d.ts",
+  "main": "pvsola.js",
+  "types": "pvsola.d.ts",
   "exports": {
-    ".": "./hybrid.js",
+    ".": "./pvsola.js",
     "./audio": {
       "types": "./audio.d.ts",
       "default": "./audio.js"
@@ -15,8 +15,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "hybrid.js",
-    "hybrid.d.ts",
+    "pvsola.js",
+    "pvsola.d.ts",
     "README.md",
     "LICENSE",
     "util.js",
@@ -24,30 +24,28 @@
     "audio.d.ts"
   ],
   "dependencies": {
-    "@audio/stretch-pvoc-lock": "^1.0.0",
-    "@audio/stretch-wsola": "^2.0.0",
-    "fourier-transform": "^2.3.0"
+    "fourier-transform": "^2.5.0",
+    "@audio/spectral-pvoc": "^1.1.0"
   },
   "keywords": [
     "audio",
     "dsp",
     "time-stretch",
-    "hpss",
-    "harmonic-percussive",
-    "hybrid",
+    "pvsola",
     "phase-vocoder",
-    "stft"
+    "shape-invariant",
+    "speech"
   ],
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "author": "Dmitry Iv. <dfcreative@gmail.com>",
-  "homepage": "https://github.com/audiojs/stretch/tree/main/packages/stretch-hybrid",
+  "homepage": "https://github.com/audiojs/stretch/tree/main/packages/stretch-pvsola",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/audiojs/stretch.git",
-    "directory": "packages/stretch-hybrid"
+    "directory": "packages/stretch-pvsola"
   },
   "bugs": "https://github.com/audiojs/stretch/issues",
   "engines": {

@@ -1,5 +1,5 @@
 import test, { almost, ok, is } from 'tst'
-import { wsola, pvoc, pvocLock, pghi, transient, hybrid, paulstretch, psola, sms } from './index.js'
+import { wsola, pvoc, pvocLock, pvsola, pghi, transient, hybrid, paulstretch, psola, sms } from './index.js'
 import { lsd, chordBalance, chordRetention, modulationDepth } from '@audio/quality'
 
 // Plain OLA via wsola with delta:0 (correlation search disabled)
@@ -73,6 +73,7 @@ function testStretch(name, fn, tolerances = {}) {
 
 // --- WSOLA ---
 testStretch('wsola', wsola)
+testStretch('pvsola', pvsola)
 
 // --- Phase vocoder (plain) ---
 testStretch('pvoc', pvoc, { rmsTol: 0.15 })
@@ -216,6 +217,7 @@ testStream('ola', ola)
 testStream('wsola', wsola)
 testStream('pvoc', pvoc)
 testStream('pvocLock', pvocLock)
+testStream('pvsola', pvsola)
 testStream('transient', transient)
 testStream('paulstretch', paulstretch, { factor: 8, lenTol: 0.25, energyTol: 2 })
 testStream('psola', psola, { lenTol: 0.25, energyTol: 0.5 })
@@ -241,6 +243,8 @@ testExtreme('pvoc', pvoc, 0.1, 100)
 testExtreme('pvoc', pvoc, 10, 100000)
 testExtreme('pvocLock', pvocLock, 0.1, 100)
 testExtreme('pvocLock', pvocLock, 10, 100000)
+testExtreme('pvsola', pvsola, 0.1, 100)
+testExtreme('pvsola', pvsola, 10, 100000)
 testExtreme('transient', transient, 0.1, 100)
 testExtreme('transient', transient, 10, 100000)
 testExtreme('psola', psola, 0.1, 100)
@@ -303,6 +307,7 @@ stereoTest('ola', ola, { factor: 1.5 })
 stereoTest('wsola', wsola, { factor: 1.5 })
 stereoTest('pvoc', pvoc, { factor: 1.5 })
 stereoTest('pvocLock', pvocLock, { factor: 1.5 })
+stereoTest('pvsola', pvsola, { factor: 1.5 })
 stereoTest('transient', transient, { factor: 1.5 })
 stereoTest('paulstretch', paulstretch, { factor: 4 })
 stereoTest('psola', psola, { factor: 1.5 })
@@ -575,7 +580,7 @@ test('pvocLock streaming: non-integer anaHop ratios stay finite', () => {
 test('manifests — every package hosts as a variable-length whole atom', async () => {
   let sr = 44100, N = 16384, d = new Float32Array(N)
   for (let i = 0; i < N; i++) d[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sr)
-  for (let pkg of ['pvoc-lock', 'pvoc', 'pghi', 'wsola', 'psola', 'sms', 'transient', 'hybrid', 'paulstretch']) {
+  for (let pkg of ['pvoc-lock', 'pvoc', 'pvsola', 'pghi', 'wsola', 'psola', 'sms', 'transient', 'hybrid', 'paulstretch']) {
     let mod = await import(`./packages/stretch-${pkg}/audio.js`)
     let m = Object.values(mod)[0]
     ok(typeof m === 'function' && m.streaming === false && typeof m.frames === 'function', `${pkg}: whole-render manifest shape`)
@@ -643,13 +648,13 @@ function streamed(fn, x, opts, sizes) {
 	return out
 }
 
-test('stream ≡ batch under any chunking (wsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient)', () => {
+test('stream ≡ batch under any chunking (wsola, pvsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient)', () => {
 	// wsola/sms zeroed their unfinished overlap-add tails at each buffer compaction (clicks
 	// every ~16k samples) and ran their own grain schedules (±2 % length); hybrid stitched
 	// independent segment renders; paulstretch threw once the analysis hop passed the frame
 	let sr = 44100, seed = 3, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1
 	let x = Float32Array.from({ length: sr + 123 }, (_, i) => 0.4 * Math.sin(2 * Math.PI * 220 * i / sr) + 0.2 * Math.sin(2 * Math.PI * 1370 * i / sr) + 0.05 * rnd())
-	for (let [name, fn] of Object.entries({ wsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient })) {
+	for (let [name, fn] of Object.entries({ wsola, pvsola, sms, hybrid, paulstretch, pvoc, pvocLock, pghi, transient })) {
 		for (let factor of [0.13, 0.5, 1.37, 3]) {
 			let batch = fn(Float32Array.from(x), { factor, sampleRate: sr })
 			for (let sizes of [[997], [64], [4096, 3, 1000]]) {
@@ -698,4 +703,79 @@ test('paulstretch — level stays flat across the grain hop (random-phase grains
 	let ref = 0.09 / 3, db = [...e].map((v, b) => 10 * Math.log10(v / n[b] / ref))
 	ok(Math.max(...db) - Math.min(...db) < 0.3, `ripple across the hop ${(Math.max(...db) - Math.min(...db)).toFixed(2)} dB`)
 	almost(10 * Math.log10(all / (y.length - 44100 * 4) / ref), 0, 0.3, 'level matches the input')
+})
+
+test('wsola stretcher — a host map at rate 1 gives the input back; one alignment for all channels; no read past a declared end', async () => {
+	let { stretcher } = await import('./packages/stretch-wsola/wsola.js')
+	let sr = 44100, seed = 5, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1
+	let x = Float32Array.from({ length: sr }, (_, i) => 0.4 * Math.sin(2 * Math.PI * 180 * i / sr) + 0.1 * rnd())
+	let run = (o, chs) => { let s = stretcher(chs.length, o), a = s.write(chs), b = s.end(); return a.map((p, c) => { let r = new Float32Array(p.length + b[c].length); r.set(p); r.set(b[c], p.length); return r }) }
+	let [y] = run({ at: s => s, sampleRate: sr }, [x])
+	ok(y.length >= x.length && x.every((v, i) => v === y[i]), 'at(s) = s: the input, sample for sample')
+	let [l, r] = run({ factor: 1.7, sampleRate: sr }, [x, x.map(v => -v)])
+	ok(l.every((v, i) => v === -r[i]), 'channels share one search')
+	// a stretch to a declared end: the last samples are still the input's, not silence past it
+	let [z] = run({ at: s => s / 2, end: x.length, sampleRate: sr }, [x])
+	let tail = z.subarray(2 * x.length - 2000, 2 * x.length)
+	ok(tail.every(v => v !== 0), 'the end of a 2× stretch reads within the input')
+	// a host's end between samples (a sliding map's), fed silence past it as a host's reader pads, never ended: reads stay
+	// on whole samples (were NaN once the end capped them)
+	// (43941 samples put segment 56's centre 50 samples before the end, where the cap binds)
+	let h = stretcher(1, { at: s => s / 1.37, end: 43941 - 0.4, sampleRate: sr })
+	let q = [...h.write([x.subarray(0, 43941)])[0], ...h.write([new Float32Array(sr)])[0]]
+	ok(q.length > 1.3 * x.length && q.every(Number.isFinite), 'a fractional end: finite')
+	// the smallest inputs, and a stream split just before its end, as the batch
+	for (let n of [0, 1, 100, 1500]) {
+		let y = wsola(x.slice(0, n), { factor: 1.5 })
+		ok(y.length === Math.round(n * 1.5) && y.every(Number.isFinite), `${n} samples → ${y.length}, finite`)
+	}
+	let whole = wsola(x, { factor: 1.37 })
+	for (let sizes of [[x.length - 1, 1], [x.length]]) {
+		let s = streamed(wsola, x, { factor: 1.37 }, sizes)
+		ok(s.length === whole.length && s.every((v, i) => v === whole[i]), `stream split ${sizes} ≡ batch`)
+	}
+	ok(wsola({ factor: 2 })().length === 0, 'a stream ended unfed: nothing')
+})
+
+test('pvsola — slowed noise stays noise (no comb); a voice keeps its pulses; a host map at rate 1 gives the input back', async () => {
+	let { stretcher } = await import('./packages/stretch-pvsola/pvsola.js')
+	let sr = 44100, seed = 9, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1
+	// the strongest normalized autocorrelation over 2 to 20 ms lags, 20 ms frames: WSOLA's repeats make noise periodic
+	let comb = y => {
+		let W = 882, s = 0, c = 0
+		for (let p = sr / 2; p + 2 * W < y.length - sr / 2; p += 2205, c++) {
+			let best = 0
+			for (let l = 88; l <= W; l++) { let xy = 0, xx = 0, yy = 0; for (let i = 0; i < W; i++) { let a = y[p + i], b = y[p + i + l]; xy += a * b; xx += a * a; yy += b * b } best = Math.max(best, xy / Math.sqrt(xx * yy)) }
+			s += best
+		}
+		return s / c
+	}
+	let noise = Float32Array.from({ length: sr * 2 }, () => .3 * rnd()), k = comb(noise)
+	for (let f of [1.5, 2]) {
+		let p = comb(pvsola(noise, { factor: f })), w = comb(wsola(noise, { factor: f }))
+		ok(p < k + .06 && w > p + .2, `×${f}: pvsola ${p.toFixed(3)}, wsola ${w.toFixed(3)}, the input ${k.toFixed(3)}`)
+	}
+	// glottal pulses at 120 Hz through two formants: their kurtosis kept, which the plain vocoder halves
+	let x = new Float32Array(sr * 2), ph = 0, z = [0, 0, 0, 0], res = (f, bw) => { let r = Math.exp(-Math.PI * bw / sr); return [2 * r * Math.cos(2 * Math.PI * f / sr), -r * r] }
+	let [a1, a2] = res(700, 80), [b1, b2] = res(1200, 100)
+	for (let i = 0; i < x.length; i++) { ph += 120 * (1 + .05 * Math.sin(2 * Math.PI * 3 * i / sr)) / sr; let e = ph >= 1 ? (ph -= 1, 1) : 0, s1 = e + a1 * z[0] + a2 * z[1]; z[1] = z[0]; z[0] = s1; x[i] = s1 + b1 * z[2] + b2 * z[3]; z[3] = z[2]; z[2] = x[i] }
+	let kurt = y => { let a = y.length >> 2, b = y.length - a, mu = 0, m2 = 0, m4 = 0; for (let i = a; i < b; i++) mu += y[i] / (b - a); for (let i = a; i < b; i++) { let d = y[i] - mu; m2 += d * d; m4 += d ** 4 } return m4 * (b - a) / (m2 * m2) }
+	for (let f of [1.5, 2]) {
+		let kp = kurt(pvsola(x, { factor: f })) / kurt(x), kl = kurt(pvocLock(x, { factor: f })) / kurt(x)
+		ok(kp > .95 && kl < .75, `×${f}: pulse kurtosis kept ${kp.toFixed(2)} (phase-locked vocoder ${kl.toFixed(2)})`)
+	}
+	let s = stretcher(1, { at: t => t, sampleRate: sr }), y = [...s.write([noise])[0], ...s.end()[0]], e = 0
+	for (let i = 0; i < noise.length; i++) e = Math.max(e, Math.abs(y[i] - noise[i]))
+	ok(e < 1e-6, `at(s) = s: the input (${e.toExponential(1)})`)
+	// the smallest inputs, a stream split just before its end, a stream ended unfed
+	for (let n of [0, 1, 100, 1500]) {
+		let q = pvsola(noise.slice(0, n), { factor: 1.5 })
+		ok(q.length === Math.round(n * 1.5) && q.every(Number.isFinite), `${n} samples → ${q.length}, finite`)
+	}
+	let whole = pvsola(x, { factor: 1.37 })
+	for (let sizes of [[x.length - 1, 1], [x.length]]) {
+		let q = streamed(pvsola, x, { factor: 1.37 }, sizes)
+		ok(q.length === whole.length && q.every((v, i) => v === whole[i]), `stream split ${sizes} ≡ batch`)
+	}
+	ok(pvsola({ factor: 2 })().length === 0, 'a stream ended unfed: nothing')
 })
