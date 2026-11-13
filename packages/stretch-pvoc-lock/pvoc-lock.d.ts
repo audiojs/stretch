@@ -4,6 +4,12 @@ export interface StreamWriter {
   (): Float32Array
 }
 
+/** Streaming form over several channels: a chunk of each in, what is ready of each out; no argument flushes the tails */
+export interface ChannelsWriter {
+  (chunks: Float32Array[]): Float32Array[]
+  (): Float32Array[]
+}
+
 export interface StretchOpts {
   /** time-stretch ratio (output / input duration) */
   factor?: number
@@ -22,6 +28,8 @@ export interface PvocLockOpts extends Omit<StretchOpts, 'factor'> {
 
 declare const pvocLock: {
   (data: Float32Array, opts?: PvocLockOpts): Float32Array
+  /** one vocoder for `channels` channels, their frames at the same places; each channel's samples are those its own stream gives */
+  (opts: PvocLockOpts & { channels: number }): ChannelsWriter
   (opts?: PvocLockOpts): StreamWriter
 }
 export default pvocLock

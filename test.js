@@ -574,6 +574,23 @@ test('pvocLock streaming: non-integer anaHop ratios stay finite', () => {
   }
 })
 
+test('pvocLock streaming: channels in one vocoder, each its own stream\'s samples', () => {
+  // fourier-transform 2.6 stftStream `channels`: a channel's samples are the ones its own stream gives, bit for bit
+  let x = [sine(440, fs, fs), sine(660, fs, fs)], chunk = 4096
+  for (let factor of [1.5, 0.8]) {
+    let both = pvocLock({ factor, frameSize: 1024, channels: 2 }), each = x.map(() => pvocLock({ factor, frameSize: 1024 }))
+    let got = [[], []], want = [[], []]
+    for (let i = 0; i <= x[0].length; i += chunk) {
+      let last = i >= x[0].length, ys = last ? both() : both(x.map(c => c.subarray(i, i + chunk)))
+      x.forEach((c, k) => { got[k].push(...ys[k]); want[k].push(...(last ? each[k]() : each[k](c.subarray(i, i + chunk)))) })
+    }
+    for (let k = 0; k < 2; k++) {
+      is(got[k].length, want[k].length, `factor ${factor}, channel ${k}: length`)
+      ok(got[k].length > 0 && got[k].every((v, i) => v === want[k][i]), `factor ${factor}, channel ${k}: the same samples`)
+    }
+  }
+})
+
 // =============================================================================
 // audio.js manifests — whole-render atoms with a structural `frames` hook
 

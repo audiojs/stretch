@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pvoc-lock",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "Phase-locked vocoder (Laroche & Dolson 1999) — eliminates phasiness of plain pvoc",
   "type": "module",
   "sideEffects": false,
@@ -24,8 +24,8 @@
     "audio.d.ts"
   ],
   "dependencies": {
-    "fourier-transform": "^2.5.0",
-    "@audio/spectral-pvoc": "^1.1.0"
+    "fourier-transform": "^2.6.0",
+    "@audio/spectral-pvoc": "^1.2.0"
   },
   "keywords": [
     "audio",
