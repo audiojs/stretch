@@ -562,6 +562,43 @@ for (let [name, fn] of [['pvoc', pvoc], ['pvocLock', pvocLock], ['pghi', pghi], 
   })
 }
 
+// Channels of one sound stretched together ({ together }): what is between them (their level and phase apart, bin by
+// bin) is the input's. Notes entering one after another, each channel hearing them at its own level and a few samples
+// apart, over noise of its own: apart, the default, every note takes a phase of its own in each channel.
+test('pvocLock: channels together keep the lag and the correlation between them; apart they do not; a channel alone is the mono stretch', () => {
+  let sr = 44100, n = sr * 3, seed = 7, rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32 - 0.5
+  let notes = [220, 277.18, 329.63, 440, 554.37, 659.25].map((f, i) => ({ f, at: Math.round(i * 0.45 * sr) })), LAG = 11
+  let voice = (delay, gain) => Float32Array.from({ length: n }, (_, i) => {
+    let v = 0.002 * rnd()
+    for (let { f, at } of notes) { let t = i - delay - at; if (t >= 0) v += gain * 0.2 * Math.exp(-t / (0.6 * sr)) * (Math.sin(2 * Math.PI * f * t / sr) + 0.5 * Math.sin(4 * Math.PI * f * t / sr)) }
+    return v
+  })
+  let L = voice(0, 1), R = voice(LAG, 0.7)
+  // the lag (samples) at which two channels agree best over [a, b), and how well
+  let meet = (x, y, a, b) => {
+    let best = [-2, 0], xx = 0
+    for (let i = a; i < b; i++) xx += x[i] * x[i]
+    for (let lag = -40; lag <= 40; lag++) { let xy = 0, yy = 0; for (let i = a; i < b; i++) { xy += x[i] * y[i + lag]; yy += y[i + lag] * y[i + lag] } let r = xy / Math.sqrt(xx * yy); if (r > best[0]) best = [r, lag] }
+    return best
+  }
+  for (let factor of [0.8, 1.25]) {
+    let [l, r] = pvocLock([L, R], { factor, together: true }), write = pvocLock({ factor, channels: 2, together: true }), a = write([L, R]), b = write()
+    ok(l.length === a[0].length + b[0].length && l.every((v, i) => Object.is(v, i < a[0].length ? a[0][i] : b[0][i - a[0].length])), `${factor}×: an array of channels together is the stream's samples`)
+    // apart: each channel the mono stretch of it, and the lag between them no longer the input's everywhere
+    let [al, ar] = pvocLock([L, R], { factor }), own = pvocLock(L, { factor }), far = 0
+    ok(al.length === own.length && al.every((v, i) => Object.is(v, own[i])), `${factor}×: apart, a channel is its own stretch`)
+    for (let w = 0; w < 5; w++) {
+      let from = Math.round((0.3 + w * 0.5) * sr), [r0, lag0] = meet(L, R, from, from + sr / 2 | 0), o = Math.round(from * factor), [r1, lag1] = meet(l, r, o, o + (sr / 2 * factor | 0))
+      ok(Math.abs(lag1 - lag0) <= 1 && Math.abs(r1 - r0) < 0.03, `${factor}×, ${(from / sr).toFixed(1)} s: the channels meet at ${lag1} samples (r ${r1.toFixed(3)}), the input's at ${lag0} (${r0.toFixed(3)})`)
+      let [r2, lag2] = meet(al, ar, o, o + (sr / 2 * factor | 0))
+      far = Math.max(far, Math.abs(lag2 - lag0), 40 * Math.abs(r2 - r0))
+    }
+    ok(far > 1, `${factor}×: apart, the lag or the correlation between the channels leaves the input's (${far.toFixed(1)})`)
+    let mono = pvocLock(L, { factor }), alone = pvocLock({ factor, channels: 1 }), m = alone([L]), t = alone()
+    ok(mono.every((v, i) => Object.is(v, i < m[0].length ? m[0][i] : t[0][i - m[0].length])), `${factor}×: one channel, the mono stretch bit for bit`)
+  }
+})
+
 test('pvocLock streaming: non-integer anaHop ratios stay finite', () => {
   // regression: hopSize/factor was passed unrounded — the STFT ring indexed at a
   // fractional hop and emitted NaN for any non-integer ratio (all semitone ratios)

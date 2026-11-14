@@ -24,11 +24,15 @@ export interface PvocLockOpts extends Omit<StretchOpts, 'factor'> {
   factor?: number | ((t: number) => number)
   /** Hz, for a sliding `factor`, default 44100 */
   sampleRate?: number
+  /** several channels as one sound: one rotation for all of them, the level and phase between channels kept (the image, the mono sum); default false, each channel apart */
+  together?: boolean
 }
 
 declare const pvocLock: {
   (data: Float32Array, opts?: PvocLockOpts): Float32Array
-  /** one vocoder for `channels` channels, their frames at the same places; each channel's samples are those its own stream gives */
+  /** an array of channels, each stretched apart; with `together`, as long as each other, as one sound */
+  (data: (Float32Array | Float64Array)[], opts?: PvocLockOpts): Float32Array[]
+  /** one vocoder for `channels` channels, their frames at the same places; each channel's samples are those its own stream gives, unless `together` */
   (opts: PvocLockOpts & { channels: number }): ChannelsWriter
   (opts?: PvocLockOpts): StreamWriter
 }
