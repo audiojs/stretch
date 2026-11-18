@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-paulstretch",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Paulstretch — Paul Nasca's extreme stretch (8×+) for ambient/drone material",
   "type": "module",
   "sideEffects": false,
