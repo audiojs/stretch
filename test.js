@@ -756,6 +756,24 @@ test('psola stream — spliced segments stay click-free, level-true and batch-le
 	}
 })
 
+test('psola: the silence after the last sound counts in no voicing share; followed by 0.25 s or 2 s of it, a voice stretches the same, as alone', () => {
+	// Counted, the silence decided for the voice: 0.3 s of it alone has 32 of 32 marks voiced (PSOLA); 0.25 s of silence
+	// after left 33 of 85 (under the 95 % that blends WSOLA in), 2 s left 185 of the contour's 1240 frames (under the 15 %
+	// that sends all of it to WSOLA). Alone and followed by silence the marks in the voice decide (followed by silence,
+	// one more: 33 of 33, the mark in its last period, which alone is not laid), so the two agree up to the grains that
+	// reach the input's end (two periods of 80 Hz either side of a mark)
+	let sr = 44100, n = Math.round(0.3 * sr), maxP = Math.ceil(sr / 80)
+	let x = Float32Array.from({ length: n }, (_, i) => { let s = 0; for (let h = 1; h <= 8; h++) s += Math.sin(2 * Math.PI * 220 * h * i / sr) / h; return 0.3 * s })
+	for (let factor of [0.6, 1.5]) {
+		let alone = psola(x, { factor, sampleRate: sr }), [short, long] = [0.25, 2].map(s => { let y = new Float32Array(n + Math.round(s * sr)); y.set(x); return psola(y, { factor, sampleRate: sr }) })
+		let to = Math.round((n + Math.round(0.25 * sr)) * factor), d = 0, w = Math.round((n - 4 * maxP) * factor), e = 0
+		for (let i = 0; i < to; i++) if (!Object.is(short[i], long[i])) d++
+		for (let i = 0; i < w; i++) if (!Object.is(alone[i], long[i])) e++
+		is(d, 0, `×${factor}: 0.25 s of silence after, against 2 s: the same ${to} samples`)
+		is(e, 0, `×${factor}: alone, against 2 s of silence after: the same ${w} samples, up to the end's grains`)
+	}
+})
+
 test('sms — input shorter than one frame stays finite (was NaN)', () => {
 	for (let len of [1, 100, 2047]) {
 		let x = Float32Array.from({ length: len }, (_, i) => 0.5 * Math.sin(i * 0.05))

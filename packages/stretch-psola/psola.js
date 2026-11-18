@@ -199,7 +199,7 @@ function smoothPeriods(periods, voiced, defP) {
 
 function pitchContour(data, minP, maxP, defP, opts = {}) {
   let start = maxP * 2
-  let end = data.length - maxP * 2
+  let end = (opts.end ?? data.length) - maxP * 2
   if (end <= start) return null
 
   let hop = opts.pitchHop ?? Math.max(12, Math.floor(minP * 0.75))
@@ -436,21 +436,28 @@ function psolaBatchCore(data, opts) {
 
   let n = data.length
   let outLen = Math.round(n * factor)
-  if (n < maxP * 6) return { out: wsola(data, { factor }), contour: null }
+  // The sound ends at the input's last sample that is not 0. The silence after it (the input's own, or what a host
+  // appends to hear the ring) is counted by no voicing share, which chooses among PSOLA, WSOLA and their blend: the
+  // contour runs over the sound as it would with nothing after it, and the shares count only the marks in the sound.
+  // The grains, the blend and WSOLA still run on into the silence
+  let m = n
+  while (m > 0 && data[m - 1] === 0) m--
+  if (m < maxP * 6) return { out: wsola(data, { factor }), contour: null }
 
   let contour = pitchContour(data, minP, maxP, defP, {
     pitchHop: opts?.pitchHop,
     contourCache: opts?.contourCache,
     segmentOffset: opts?.segmentOffset || 0,
+    end: m,
   })
   if (!contour) return { out: wsola(data, { factor }), contour: null }
 
   let { markPos, periods, voiced } = marks(data, contour, minP, maxP)
   if (markPos.length < 4) return { out: wsola(data, { factor }), contour }
 
-  let voicedCount = 0
-  for (let i = 0; i < voiced.length; i++) if (voiced[i]) voicedCount++
-  if (voicedCount < Math.max(4, voiced.length * 0.2)) return { out: wsola(data, { factor }), contour }
+  let voicedCount = 0, sounding = 0
+  for (let i = 0; i < voiced.length && markPos[i] < m; i++) { sounding++; if (voiced[i]) voicedCount++ }
+  if (voicedCount < Math.max(4, sounding * 0.2)) return { out: wsola(data, { factor }), contour }
 
   let { out, norm } = render(data, outLen, factor, markPos, periods, voiced, minP, maxP)
   let allEmpty = true
@@ -460,7 +467,7 @@ function psolaBatchCore(data, opts) {
   normalize(out, norm)
 
   // Blend WSOLA in weakly voiced regions where pitch-synchronous grains sound brittle
-  if (voicedCount < voiced.length * 0.95) {
+  if (voicedCount < sounding * 0.95) {
     let noise = wsola(data, { factor })
     let weights = voicedWeights(contour)
     for (let i = 0; i < outLen; i++) {
