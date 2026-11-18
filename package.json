@@ -27,9 +27,9 @@
     "test": "node test.js",
     "test:browser": "node test/browser.js",
     "test:all": "npm test --workspaces --if-present && npm test && npm run test:browser",
-    "publish:all": "npm publish --workspaces && npm publish",
+    "publish:all": "node ../compile/tools/tested.js && npm publish --workspaces && npm publish",
     "members": "node scripts/members.js",
-    "prepublishOnly": "node scripts/members.js --check"
+    "prepublishOnly": "node ../compile/tools/tested.js && node scripts/members.js --check"
   },
   "repository": {
     "type": "git",

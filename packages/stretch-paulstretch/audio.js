@@ -20,6 +20,11 @@ export const stretchPaul = (ctx) => {
 stretchPaul.channels = 'any'
 stretchPaul.streaming = false
 stretchPaul.frames = (n, { params }) => Math.round(n * params.factor[0])
+// What a host pads the input with so the stretch's decay is rendered, in seconds of input: a grain reads N samples
+// around input position k·hop/factor (hop N/2), so grains read the input until it is a hop behind them, and the last
+// one's output ends a hop later, hop/factor more of input. Past hop·(1 + 1/factor) of padding the output is silent,
+// exactly; its stretched length, factor times as long, follows from `frames`
+stretchPaul.tail = ({ sampleRate, params }) => 2 ** Math.round(Math.log2(params.frame[0] * sampleRate)) / 2 * (1 + 1 / params.factor[0]) / sampleRate
 stretchPaul.params = {
 	factor: { type: 'number', min: 0.25, max: 8, default: 4 },
 	frame:  { type: 'number', min: 0.05, max: 2, default: 0.37, unit: 's' },

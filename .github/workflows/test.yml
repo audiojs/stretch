@@ -28,8 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # test:all without its browser part, which the two steps below run once Playwright is installed
       - name: Run tests
-        run: npm test
+        run: npm test --workspaces --if-present && npm test
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium

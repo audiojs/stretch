@@ -22,7 +22,8 @@ export declare const stretchPaul: {
   (ctx: Ctx): Process
   channels: "any"
   streaming: false
-  frames: (frames: number, ctx: { sampleRate: number, params: Live }) => number
+  tail: (at: { sampleRate: number, params: Live, buffers: {} }) => number
+  frames: (frames: number, at: { sampleRate: number, params: Live, buffers: {} }) => number
   params: {
     /** 0.25..8 (default 4) */
     "factor": { type: "number", default: 4 }

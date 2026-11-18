@@ -656,6 +656,23 @@ test('manifests — every package hosts as a variable-length whole atom', async 
   }
 })
 
+test('paulstretch manifest: its tail is the input padding that renders the whole smear: more adds only silence, half cuts it (was 0)', async () => {
+  // a host pads a whole-signal processor's input with its tail (audio's tailed()), so for a stretch the tail is in
+  // seconds of input; the output with that much padding is the prefix of one padded three times as long, whose rest is 0
+  let { stretchPaul } = await import('./packages/stretch-paulstretch/audio.js')
+  for (let [sr, factor, frame] of [[44100, 4, 0.37], [48000, 0.25, 0.05], [22050, 8, 2], [44100, 1.5, 0.1]]) {
+    let S = Math.round(0.6 * sr), x = new Float32Array(S), s = 5
+    for (let i = 0; i < S; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; x[i] = s / 4294967296 - 0.5 }
+    let params = { factor: new Float32Array([factor]), frame: new Float32Array([frame]) }, P = Math.ceil(stretchPaul.tail({ sampleRate: sr, params }) * sr)
+    let run = p => { let d = new Float32Array(S + p); d.set(x); let out = [new Float32Array(stretchPaul.frames(d.length, { sampleRate: sr, params }))]; stretchPaul({ sampleRate: sr })([[d]], [out], params); return out[0] }
+    let a = run(P), b = run(3 * P + 1000), c = run(P >> 1), peak = b.reduce((m, v) => Math.max(m, Math.abs(v)), 0), rest = 0, cut = 0
+    for (let i = a.length; i < b.length; i++) rest = Math.max(rest, Math.abs(b[i]))
+    for (let i = c.length; i < a.length; i++) cut = Math.max(cut, Math.abs(b[i]))
+    ok(a.every((v, i) => v === b[i]) && rest === 0, `${sr} Hz, ×${factor}, ${frame} s: padded by the tail, the whole output`)
+    ok(cut > peak / 100, `half the tail cuts sound off (${(20 * Math.log10(cut / peak)).toFixed(1)} dB re the peak)`)
+  }
+})
+
 test('pvoc-lock, pghi — sliding factor fn: length integrates, pitch preserved throughout', () => {
 	let sr = 44100, n = sr * 2, d = new Float32Array(n)
 	for (let i = 0; i < n; i++) d[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sr)
