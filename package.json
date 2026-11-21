@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "type": "module",
   "types": "index.d.ts",
   "description": "Time stretching — umbrella for @audio/stretch-* atoms (WSOLA, phase vocoder variants, PaulStretch, PSOLA, SMS)",
@@ -8,17 +8,18 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./package.json": "./package.json",
-    "./*": {
-      "types": "./members/*.d.ts",
-      "default": "./members/*.js"
-    }
+    "./audio": {
+      "types": "./audio.d.ts",
+      "default": "./audio.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
     "index.d.ts",
     "LICENSE",
-    "members/"
+    "audio.js",
+    "audio.d.ts"
   ],
   "workspaces": [
     "packages/*"
@@ -28,8 +29,7 @@
     "test:browser": "node test/browser.js",
     "test:all": "npm test --workspaces --if-present && npm test && npm run test:browser",
     "publish:all": "node ../compile/tools/tested.js && npm publish --workspaces && npm publish",
-    "members": "node scripts/members.js",
-    "prepublishOnly": "node ../compile/tools/tested.js && node scripts/members.js --check"
+    "prepublishOnly": "node ../compile/tools/tested.js"
   },
   "repository": {
     "type": "git",
