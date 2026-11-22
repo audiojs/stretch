@@ -1,6 +1,6 @@
 # @audio/stretch-pghi
 
-Phase Gradient Heap Integration vocoder — "Phase Vocoder Done Right" (Průša & Holighaus, 2017), causal RTPGHI variant. Synthesis phase is integrated from the analysis phase gradients (instantaneous frequency across time, stretched group delay across frequency), visiting bins in order of decreasing magnitude via a max-heap — phase always flows from strong bins into their neighbourhoods.
+Phase Gradient Heap Integration vocoder — "Phase Vocoder Done Right" (Průša & Holighaus, 2017), causal RTPGHI variant. Synthesis phase is integrated from the analysis phase gradients (instantaneous frequency across time; across frequency the group delay, stretched where bins share an impulse and kept where they share a partial, told apart by the phase's mixed partial derivative), visiting bins in order of decreasing magnitude via a max-heap — phase always flows from strong bins into their neighbourhoods.
 
 No peak picking, no transient heuristics: chirps, vibrato and dense spectra stay coherent by construction.
 

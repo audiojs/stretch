@@ -4,7 +4,8 @@
 // Instead of propagating every bin's phase independently (pvoc) or locking bins
 // to picked peaks (pvoc-lock), synthesis phase is *integrated* from the analysis
 // phase gradients — along time at each bin's instantaneous frequency, along
-// frequency at the stretched local group delay — visiting bins in order of
+// frequency at the local group delay, stretched where bins share an impulse and
+// kept where they share a partial — visiting bins in order of
 // decreasing magnitude via a max-heap, so phase always flows from strong bins
 // into their neighbourhoods. No peak picking, no transient heuristics; chirps,
 // vibrato and dense spectra stay coherent by construction.
@@ -15,6 +16,12 @@
 // - Průša, Z. & Holighaus, N. (2017). "Phase Vocoder Done Right." EUSIPCO/DAFx.
 // - Průša, Z. & Søndergaard, P. (2016). "Real-Time Spectrogram Inversion Using
 //   Phase Gradient Heap Integration" (RTPGHI). DAFx-16.
+// - Nelson, D. J. (2001). "Cross-spectral methods for processing speech." JASA 110(5), 2575-2592.
+// - Fitz, K. R. & Fulop, S. A. (2009). "A Unified Theory of Time-Frequency Reassignment."
+//   arXiv:0903.3080 (Nelson's condition: the mixed partial derivative near 0 at sinusoidal
+//   components, near 1 at impulsive ones).
+// - Laroche, J. & Dolson, M. (1999). "Improved phase vocoder time-scale modification of audio."
+//   IEEE Trans. Speech and Audio Processing 7(3), 323-332.
 
 import { stftBatch, stftStream } from 'fourier-transform/stft'
 import { writer, wrapPhase, stretchOpts, PI2 } from './util.js'
@@ -62,7 +69,8 @@ function makeProcess(tolerance) {
       state.prevTgrad = new Float64Array(B)
       state.synPrev = new Float64Array(B)   // center-origin synthesis phases
       state.tgrad = new Float64Array(B)
-      state.fgrad = new Float64Array(B)
+      state.fstep = new Float64Array(B)
+      state.dp = new Float64Array(B)
       state.p = new Float64Array(B)
       state.heapKeys = new Float64Array(2 * B)
       state.heapItems = new Int32Array(2 * B)
@@ -84,7 +92,7 @@ function makeProcess(tolerance) {
       return { mag, phase }
     }
 
-    let tgrad = state.tgrad, fgrad = state.fgrad
+    let tgrad = state.tgrad, fstep = state.fstep, dev = state.dp
     let assigned = state.assigned, keys = state.heapKeys, items = state.heapItems
     let synPrev = state.synPrev, p = state.p
 
@@ -92,19 +100,25 @@ function makeProcess(tolerance) {
     // frequency (standard heterodyned estimate; the center-origin term cancels
     // in the frame-to-frame difference).
     for (let m = 0; m < B; m++) {
-      let dp = wrapPhase(phase[m] - state.prevPhase[m] - m * freqPerBin * anaHop)
+      let dp = dev[m] = wrapPhase(phase[m] - state.prevPhase[m] - m * freqPerBin * anaHop)
       tgrad[m] = m * freqPerBin * synHop + r * dp
     }
 
-    // Frequency gradient (local group delay), from center-origin phases:
-    // φc(m) = φ(m) + πm removes the ±π/bin flip of frame-start phases. Under
-    // stretch the group delay scales by r — with the center-aligned stft mapping
-    // (input t → output t·r at frame centers) that scaling is exact.
-    for (let m = 0; m < B; m++) {
-      let lo = m > 0 ? wrapPhase(phase[m] - phase[m - 1] + Math.PI) : 0
-      let hi = m < half ? wrapPhase(phase[m + 1] - phase[m] + Math.PI) : 0
-      let d = m === 0 ? hi : m === half ? lo : 0.5 * (lo + hi)
-      fgrad[m] = r * d
+    // The step from each bin to the next, from center-origin phases: φc(m) = φ(m) + πm removes the ±π/bin flip of
+    // frame-start phases. An impulse d samples off the frame's centre steps −2πd/N a bin, and stretched it lies r·d
+    // off (with the center-aligned stft mapping, input t → output t·r at frame centres, exactly): its step scales by
+    // r. A steady partial's bins hold the window's own transform, which is real: equal phases across the main lobe
+    // and a turn of π at each null. Those are no delay, and scaled by r they tear the lobe apart (a gradient centred
+    // over three bins and scaled put r·π/4 on the main-lobe bin beside a null: at 2× a steady partial carried noise
+    // 16 dB under it, 30 dB under at 0.5×; 28 and 50 dB with the step below). What tells the two is the mixed
+    // partial derivative of the phase, ∂²φ/∂t∂ω, here the instantaneous frequency's change from one bin to the next
+    // in bins: 0 where both follow one partial (they report one frequency), 1 across an impulse (each reports its
+    // own centre) (Nelson 2001; Fitz & Fulop 2009). The step is the analysis step scaled by 1 + (r − 1)·that:
+    // identity phase locking (Laroche & Dolson 1999) within a partial, the stretched group delay within an impulse.
+    let perBin = 1 / (freqPerBin * anaHop)
+    for (let m = 0; m < half; m++) {
+      let s = 1 + wrapPhase(dev[m + 1] - dev[m]) * perBin
+      fstep[m] = wrapPhase(phase[m + 1] - phase[m] + Math.PI) * (1 + (r - 1) * (s < 0 ? 0 : s > 1 ? 1 : s))
     }
 
     // Heap integration (mirrors phaseret's rtpghiupdate): every bin significant
@@ -144,12 +158,12 @@ function makeProcess(tolerance) {
         // from current frame: propagate through frequency to neighbours
         let m = item - B
         if (m < half && !assigned[m + 1] && mag[m + 1] > athr) {
-          p[m + 1] = p[m] + 0.5 * (fgrad[m] + fgrad[m + 1])
+          p[m + 1] = p[m] + fstep[m]
           assigned[m + 1] = 1; remaining--
           size = heapPush(keys, items, size, mag[m + 1], B + m + 1)
         }
         if (m > 0 && !assigned[m - 1] && mag[m - 1] > athr) {
-          p[m - 1] = p[m] - 0.5 * (fgrad[m] + fgrad[m - 1])
+          p[m - 1] = p[m] - fstep[m - 1]
           assigned[m - 1] = 1; remaining--
           size = heapPush(keys, items, size, mag[m - 1], B + m - 1)
         }

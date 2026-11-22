@@ -415,11 +415,12 @@ let qualityCases = [
   ['wsola',     wsola,     'chord',  f => chordSig(0.5 * f),                     2.0, 0.9],
   ['wsola',     wsola,     'vowel',  f => vowelSig(150, 0.5 * f),                2.0, 0.2],
 
-  // pghi: measured 0.17 sine / 0.85 sweep / 0.94 chord @2x (gradient integration
-  // beats locking on modulated content, approximates it on steady polyphony)
+  // pghi: measured 0.10 sine / 0.25 sweep / 0.83 chord @2x (gradient integration
+  // beats locking on modulated content, approximates it on steady polyphony); 0.17 / 0.85 / 0.94 while it
+  // stretched the step between a partial's own bins
   ['pghi',      pghi,      'sine',   f => sineSig(440, 0.5 * f),                 2.0, 0.4],
-  ['pghi',      pghi,      'sweep',  f => sweepSig(200, 2000, 0.5 * f),          2.0, 1.1],
-  ['pghi',      pghi,      'chord',  f => chordSig(0.5 * f),                     2.0, 1.2],
+  ['pghi',      pghi,      'sweep',  f => sweepSig(200, 2000, 0.5 * f),          2.0, 0.5],
+  ['pghi',      pghi,      'chord',  f => chordSig(0.5 * f),                     2.0, 1.1],
 
   ['hybrid',    hybrid,    'chord',  f => chordSig(0.5 * f),                     2.0, 1.0],
 
@@ -436,6 +437,39 @@ for (let [name, fn, sigName, gen, factor, maxLSD] of qualityCases) {
     ok(score < maxLSD, `LSD=${score.toFixed(2)} dB (limit ${maxLSD})`)
   })
 }
+
+// Forty steady partials from 100 Hz to 8 kHz, 60 Hz apart or more, each at its own phase: stretched, they are the
+// same partials for longer and nothing else. What a take holds beside them, against them: its power less the
+// partials' own (each read through a Blackman-Harris window over the take's middle, where the partials lie 92 dB
+// under one another). A partial's bins are the window's transform around it: equal phases across its main lobe, a
+// half turn at each null; pghi stretched those steps as it stretches an impulse's delay, and the lobes came apart:
+// −18 dB at 2×, −27 dB at 0.5×. pvocLock, which locks a peak's bins to it, reads −36 dB at both.
+function steadySig(dur) {
+  let seed = 5, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, freqs = []
+  while (freqs.length < 40) { let f = 100 * 80 ** rnd(); if (freqs.every(g => Math.abs(g - f) > 60)) freqs.push(f) }
+  let n = Math.round(dur * fs), d = new Float32Array(n)
+  for (let f of freqs) { let ph = 2 * Math.PI * rnd(); for (let i = 0; i < n; i++) d[i] += 0.02 * Math.sin(2 * Math.PI * f * i / fs + ph) }
+  return [d, freqs]
+}
+function beside(y, freqs) {
+  let N = Math.min(65536, y.length >> 1), a = (y.length - N) >> 1, sw = 0, sw2 = 0, all = 0, own = 0
+  let w = Float64Array.from({ length: N }, (_, i) => { let t = 2 * Math.PI * i / (N - 1); return 0.35875 - 0.48829 * Math.cos(t) + 0.14128 * Math.cos(2 * t) - 0.01168 * Math.cos(3 * t) })
+  for (let i = 0; i < N; i++) { sw += w[i]; sw2 += w[i] * w[i]; all += (w[i] * y[a + i]) ** 2 }
+  for (let f of freqs) {
+    let re = 0, im = 0, k = 2 * Math.PI * f / fs
+    for (let i = 0; i < N; i++) { let v = w[i] * y[a + i]; re += v * Math.cos(k * i); im += v * Math.sin(k * i) }
+    own += 2 * (re * re + im * im) / (sw * sw) * sw2
+  }
+  return 10 * Math.log10(Math.max(all - own, 1e-30) / own)
+}
+test('pghi — steady partials stay their own: what lies beside them is 45 dB under them at 0.5×, 30 dB at 2×', () => {
+  let [src, freqs] = steadySig(3)
+  ok(beside(src, freqs) < -200, 'the measure reads nothing beside the partials of the input')
+  for (let [factor, max] of [[0.5, -45], [0.75, -45], [1.5, -32], [2, -30]]) {
+    let v = beside(pghi(src, { factor }), freqs)
+    ok(v < max, `${factor}×: ${v.toFixed(1)} dB (limit ${max})`)
+  }
+})
 
 // PSOLA falls through to WSOLA on polyphonic content (voiced threshold 0.72
 // rejects chords whose autocorrelation peaks ~0.58). Verify reasonable quality.
