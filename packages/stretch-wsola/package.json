@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-wsola",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "WSOLA time stretching — time-domain: speech and solo voices keep their pulse shape and attacks",
   "type": "module",
   "sideEffects": false,

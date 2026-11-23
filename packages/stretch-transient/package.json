@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-transient",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Transient-aware phase-locked vocoder (Röbel 2003) — preserves attacks on drums and plucks",
   "type": "module",
   "sideEffects": false,

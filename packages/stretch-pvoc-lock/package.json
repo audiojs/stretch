@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pvoc-lock",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Phase-locked vocoder (Laroche & Dolson 1999) — eliminates phasiness of plain pvoc",
   "type": "module",
   "sideEffects": false,

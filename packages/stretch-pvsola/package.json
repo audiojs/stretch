@@ -1,6 +1,6 @@
 {
   "name": "@audio/stretch-pvsola",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PVSOLA time stretching: a phase-locked vocoder reset to the input's own waveform where it fits; speech slowed without flanging or phasiness",
   "type": "module",
   "sideEffects": false,
